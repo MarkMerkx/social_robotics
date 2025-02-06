@@ -1,9 +1,7 @@
 import os
+
 from dotenv import load_dotenv
-import urllib.parse
-from sqlalchemy.engine import URL
-import sqlalchemy
-import pyodbc
+
 
 # Determine the absolute path to the .env file
 def find_dotenv():
