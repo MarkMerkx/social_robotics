@@ -37,7 +37,7 @@ def wait_for_response(prompt_text, session, stt, timeout=15):
         words = stt.give_me_words()  # clears new_words flag.
         if words:
             raw_response = " ".join(words)
-            # Remove all "<" and ">" characters.
+            # Remove all "<" and ">" characters which are used in the prompts
             cleaned = raw_response.replace("<", "").replace(">", "").strip()
             # If the cleaned response is very long, take only the first word.
             if len(cleaned) > 50:

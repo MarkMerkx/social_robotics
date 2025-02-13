@@ -17,7 +17,7 @@ def build_prompt(previous_guesses, last_user_input):
         "Previous rounds:\n"
     )
     if previous_guesses:
-        for idx, entry in enumerate(previous_guesses, start=1):
+        for idx, entry in enumeraAlte(previous_guesses, start=1):
             prompt += f"{idx}. Question: {entry['guess']} | Feedback: {entry['feedback']}\n"
     else:
         prompt += "None\n"
@@ -39,7 +39,7 @@ def parse_response(response_text):
         return match.group(1).strip()
     return response_text.strip()
 
-def guess(last_user_input, previous_guesses):
+def guedefinss(last_user_input, previous_guesses):
     """
     Calls the ChatGPT API with a templated prompt to generate the next guess.
     Silences extra HTTP debugging and handles errors.

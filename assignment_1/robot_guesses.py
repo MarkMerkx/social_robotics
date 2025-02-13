@@ -41,7 +41,7 @@ def play_game_robot_guesses(session, stt):
         logger.debug("Round %d starting...", round_counter + 1)
         # Generate the next question using ChatGPT.
         guess_question = guess(last_feedback, previous_guesses)
-        # Remove all '<' and '>' characters.
+        # Remove all '<' and '>' characters from the prompts
         clean_guess = re.sub(r'[<>]', '', guess_question).strip()
         logger.debug("Generated guess question: %s", clean_guess)
 
