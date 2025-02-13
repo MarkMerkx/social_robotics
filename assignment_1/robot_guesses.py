@@ -1,8 +1,9 @@
 import logging
 import re
+import string
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from api.guess_call import guess
+from api.api_handler import guess
 from game_utils import wait_for_response
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ def play_game_robot_guesses(session, stt):
     Game mode where the user thinks of a word and the robot tries to guess it by asking yes/no questions.
     """
     logger.debug("Starting play_game_robot_guesses()")
-    previous_guesses = []  # Each entry is a dict: {'guess': <question>, 'feedback': <user response>}
+    previous_guesses = []  # Each entry: {'guess': <question>, 'feedback': <user response>}
 
     yield session.call("rie.dialogue.say", text="Great! Please think of a word and keep it in your mind.")
     logger.debug("User instructed to think of a word.")
@@ -23,8 +24,7 @@ def play_game_robot_guesses(session, stt):
     # Wait for user readiness.
     ready = None
     while not ready or "yes" not in ready.lower():
-        ready = yield __import__('play_game').wait_for_response("Are you ready? Please say Yes when you are.", session,
-                                                                stt, timeout=20)
+        ready = yield wait_for_response("Are you ready? Please say Yes when you are.", session, stt, timeout=20)
         logger.debug("User readiness response: %s", ready)
         if not ready or "yes" not in ready.lower():
             yield session.call("rie.dialogue.say", text="Okay, waiting until you're ready...")
@@ -34,25 +34,23 @@ def play_game_robot_guesses(session, stt):
     yield session.call("rie.dialogue.say", text="Let's start!")
     logger.debug("User confirmed readiness. Starting guessing rounds.")
     last_feedback = ""
-    max_rounds = 10
+    max_rounds = 15
     round_counter = 0
 
     while round_counter < max_rounds:
         logger.debug("Round %d starting...", round_counter + 1)
         # Generate the next question using ChatGPT.
         guess_question = guess(last_feedback, previous_guesses)
-        # Extract text between <<< and >>> if present.
-        m = re.search(r'<<<(.*?)>>>', guess_question, re.DOTALL)
-        if m:
-            clean_guess = m.group(1).strip()
-        else:
-            clean_guess = guess_question.strip()
+        # Remove all '<' and '>' characters.
+        clean_guess = re.sub(r'[<>]', '', guess_question).strip()
         logger.debug("Generated guess question: %s", clean_guess)
 
+        # Robot speaks the question.
         yield session.call("rie.dialogue.say", text=clean_guess)
         yield sleep(3)
 
-        feedback = yield __import__('play_game').wait_for_response("Please answer the question.", session, stt)
+        # Wait for the user's answer.
+        feedback = yield wait_for_response(None, session, stt)
         if not feedback:
             feedback = "No response"
             logger.debug("No feedback received; defaulting to: %s", feedback)
@@ -62,7 +60,10 @@ def play_game_robot_guesses(session, stt):
         previous_guesses.append({'guess': clean_guess, 'feedback': feedback})
         round_counter += 1
 
-        if any(affirm in feedback.lower() for affirm in ["correct", "yes, that's it", "exactly"]):
+        # Clean feedback (remove punctuation) for a robust match.
+        feedback_cleaned = feedback.lower().translate(str.maketrans("", "", string.punctuation))
+        win_keywords = ["correct", "yes thats it", "exactly", "yes you guessed it"]
+        if any(affirm in feedback_cleaned for affirm in win_keywords):
             yield session.call("rie.dialogue.say", text="Yay! I guessed it!")
             logger.debug("User confirmed correct guess. Ending game.")
             break

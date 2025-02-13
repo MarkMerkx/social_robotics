@@ -51,7 +51,7 @@ def guess(last_user_input, previous_guesses):
         logger.debug("Built prompt for guess: %s", prompt)
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="gpt-4",
+            model="gpt-4o-mini",
             max_tokens=200,
             temperature=0.8
         )
@@ -83,7 +83,7 @@ def answer_question_with_api(chosen_word, question):
         logger.debug("Built prompt for answer: %s", prompt)
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="gpt-4",
+            model="gpt-4o-mini",
             max_tokens=20,
             temperature=0
         )
@@ -98,3 +98,31 @@ def answer_question_with_api(chosen_word, question):
     except Exception as e:
         logger.error("Error in answer_question_with_api: %s", e)
         return "I don't know"
+
+
+def generate_secret_word():
+    """
+    Uses the ChatGPT API to generate a simple secret word.
+    The prompt instructs the model to choose one common word.
+    """
+    try:
+        api_key = chat_gtp_connection()
+        client = OpenAI(api_key=api_key)
+        prompt = (
+            "Please choose one simple, common English word (preferably 4-8 letters) that is not too complex, "
+            "and output only the word."
+        )
+        logger.debug("Built prompt for secret word: %s", prompt)
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="gpt-4o-mini",
+            max_tokens=10,
+            temperature=0.5
+        )
+        word = response.choices[0].message.content.strip().lower()
+        logger.debug("Generated secret word: %s", word)
+        return word
+    except Exception as e:
+        logger.error("Error in generate_secret_word: %s", e)
+        # Fallback to a random word from a hardcoded list.
+        return "apple"
