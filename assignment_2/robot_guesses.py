@@ -5,6 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
 from api.api_handler import guess
 from game_utils import wait_for_response
+from say_animated import say_animated
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def play_game_robot_guesses(session, stt):
     logger.debug("Starting play_game_robot_guesses()")
     previous_guesses = []  # Each entry: {'guess': <question>, 'feedback': <user response>}
 
-    yield session.call("rie.dialogue.say", text="Great! Please think of a word and keep it in your mind.")
+    yield say_animated(session, "Great! Please think of a word and keep it in your mind.", gesture_name="beat_gesture")
     logger.debug("User instructed to think of a word.")
     yield sleep(5)
 
@@ -46,7 +47,7 @@ def play_game_robot_guesses(session, stt):
         logger.debug("Generated guess question: %s", clean_guess)
 
         # Robot speaks the question.
-        yield session.call("rie.dialogue.say", text=clean_guess)
+        yield say_animated(session, clean_guess, gesture_name="beat_gesture")
         yield sleep(3)
 
         # Wait for the user's answer.
@@ -64,7 +65,7 @@ def play_game_robot_guesses(session, stt):
         feedback_cleaned = feedback.lower().translate(str.maketrans("", "", string.punctuation))
         win_keywords = ["correct", "yes thats it", "exactly", "yes you guessed it"]
         if any(affirm in feedback_cleaned for affirm in win_keywords):
-            yield session.call("rie.dialogue.say", text="Yay! I guessed it!")
+            yield say_animated(session, "Yay! I guessed it!", gesture_name="celebration")
             logger.debug("User confirmed correct guess. Ending game.")
             break
         else:
@@ -72,8 +73,8 @@ def play_game_robot_guesses(session, stt):
             logger.debug("Continuing game with last feedback: %s", last_feedback)
 
     if round_counter >= max_rounds:
-        yield session.call("rie.dialogue.say", text="I give up! That was a challenging word.")
+        yield say_animated(session, "I give up! That was a challenging word.", gesture_name="shake_no")
         logger.debug("Reached maximum rounds; game over.")
 
-    yield session.call("rie.dialogue.say", text="Thanks for playing!")
+    yield say_animated(session, "Thanks for playing!", gesture_name="beat_gesture")
     logger.debug("Game ended. Thank you for playing!")

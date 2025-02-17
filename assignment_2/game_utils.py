@@ -1,6 +1,7 @@
 import logging
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
+from say_animated import say_animated
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ def wait_for_response(prompt_text, session, stt, timeout=15):
     if prompt_text:
         logger.debug("Prompting user: %s", prompt_text)
         stt.words = []  # clear previous words
-        yield session.call("rie.dialogue.say", text=prompt_text)
+        # yield session.call("rie.dialogue.say", text=prompt_text)
+        yield say_animated(session, prompt_text, gesture_name="beat_gesture")
         yield sleep(1.5)
         stt.words = []
     else:

@@ -2,10 +2,17 @@ import os
 import json
 import logging
 import random
+import re
+import time
 from twisted.internet.defer import inlineCallbacks, DeferredList
 from autobahn.twisted.util import sleep
 from alpha_mini_rug import perform_movement  # adjust the import path as needed
 
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.DEBUG,
+    datefmt='%H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # Load the gesture library once.
@@ -32,77 +39,96 @@ NEUTRAL_POSE_FRAMES = [
     }
 ]
 
+
+def add_noise_to_frames(frames, time_noise=50, angle_noise=0.05):
+    """
+    Returns a new list of frames with random noise added.
+
+    Args:
+        frames (list): A list of keyframe dictionaries.
+        time_noise (float): Maximum noise in ms to add/subtract from the frame's time.
+        angle_noise (float): Maximum noise to add/subtract from each joint angle.
+
+    Returns:
+        list: The list of noisy frames.
+    """
+    noisy_frames = []
+    for frame in frames:
+        # Add noise to time and angles.
+        noisy_time = frame.get("time", 0.0) + random.uniform(-time_noise, time_noise)
+        noisy_data = {
+            joint: angle + random.uniform(-angle_noise, angle_noise)
+            for joint, angle in frame.get("data", {}).items()
+        }
+        noisy_frames.append({"time": frame.get("time", 0.0), "data": noisy_data})
+    return noisy_frames
+
+
+@inlineCallbacks
+def loop_gesture(session, frames, dialogue_deferred, start_time, estimated_duration):
+    """
+    Repeatedly perform the given gesture (with noise) until the dialogue is finished
+    or our estimated TTS time is exceeded.
+    """
+    iteration = 0
+    while not dialogue_deferred.called:
+        elapsed = time.time() - start_time
+        logger.debug("Loop gesture iteration %d; elapsed time: %.2f (estimated: %.2f)",
+                     iteration, elapsed, estimated_duration)
+        if elapsed >= estimated_duration:
+            logger.debug("Elapsed time >= estimated duration. Breaking out of loop.")
+            break
+
+        iteration += 1
+
+        # (1) If you know how to compute actual motion time:
+        # movement_duration = get_required_time(frames)
+        # If not, pick something like movement_duration = 2.0
+
+        movement_duration = 2.0  # e.g. if your keyframes are ~2 seconds total
+        noisy_frames = add_noise_to_frames(frames)
+
+        # (2) Start the motion in async mode if your library is truly asynchronous:
+        perform_movement(session, noisy_frames, mode="linear", sync=False, force=False)
+
+        # (3) Wait for the motion to finish:
+        yield sleep(movement_duration)
+
+    logger.debug("Exiting gesture loop after %d iterations.", iteration)
+
+
 @inlineCallbacks
 def say_animated(session, text, gesture_name=None):
     """
-    Basic animated speech: speaks the text and performs a gesture once.
-    After both dialogue and movement finish, it resets to a neutral pose in a fire-and-forget manner.
-    """
-    logger.debug("say_animated called with text: '%s' and gesture: %s", text, gesture_name)
-    d_dialogue = session.call("rie.dialogue.say", text=text)
+    Aimated speech that estimates the speech duration and continuously loops a gesture
+    (with random noise) while the dialogue is playing. The gesture loop stops either when the dialogue finishes
+    or when the estimated duration is reached.
 
-    if gesture_name and gesture_name in GESTURE_LIBRARY:
-        frames = GESTURE_LIBRARY[gesture_name].get("keyframes", [])
-        if frames:
-            logger.debug("Performing gesture '%s' with %d keyframes", gesture_name, len(frames))
-            d_movement = perform_movement(session, frames, mode="linear", sync=True, force=False)
-        else:
-            logger.warning("Gesture '%s' found but has no keyframes", gesture_name)
-            d_movement = None
-    else:
-        d_movement = None
-
-    if d_movement:
-        yield DeferredList([d_dialogue, d_movement])
-    else:
-        yield d_dialogue
-
-    # Fire-and-forget: reset to neutral pose without delaying the next action.
-    session.call("rom.actuator.motor.write", frames=NEUTRAL_POSE_FRAMES, mode="linear", sync=True, force=False)
-
-
-@inlineCallbacks
-def say_animated_experimental(session, text, gesture_name=None):
-    """
-    Experimental animated speech that estimates the speech duration and continuously loops a gesture
-    (with added random noise) while the dialogue is playing. Once the dialogue finishes, it resets the robot
-    to a neutral pose using a fire-and-forget call.
+    Since our gestures already return to neutral, no additional reset is performed.
     """
     logger.debug("say_animated_experimental called with text: '%s' and gesture: %s", text, gesture_name)
+    # Record start time.
+    start_time = time.time()
     # Start the dialogue.
     dialogue_deferred = session.call("rie.dialogue.say", text=text)
 
-    # Estimate duration (simple heuristic: 0.4 sec per word)
+    # Estimate speech duration using a simple heuristic (0.4 sec per word)
     word_count = len(text.split())
     estimated_duration = word_count * 0.4
     logger.debug("Estimated speech duration: %.2f seconds", estimated_duration)
 
-    loop_gesture_deferred = None
     if gesture_name and gesture_name in GESTURE_LIBRARY:
         gesture_frames = GESTURE_LIBRARY[gesture_name].get("keyframes", [])
         if gesture_frames:
-            @inlineCallbacks
-            def loop_gesture():
-                # Loop the gesture until the dialogue call is complete.
-                while not dialogue_deferred.called:
-                    noisy_frames = []
-                    for frame in gesture_frames:
-                        # Introduce small random noise for variety.
-                        noisy_time = frame.get("time", 0.0) + random.uniform(-0.1, 0.1)
-                        noisy_data = {joint: angle + random.uniform(-0.05, 0.05)
-                                      for joint, angle in frame.get("data", {}).items()}
-                        noisy_frames.append({"time": noisy_time, "data": noisy_data})
-                    logger.debug("Performing noisy gesture loop with frames: %s", noisy_frames)
-                    yield perform_movement(session, noisy_frames, mode="linear", sync=True, force=False)
-                    # Short delay before repeating.
-                    yield sleep(0.2)
-            loop_gesture_deferred = loop_gesture()
+            logger.debug("Starting gesture loop for '%s'", gesture_name)
+            # Notice we must *yield* here to actually wait in a single linear flow:
+            yield loop_gesture(session, gesture_frames, dialogue_deferred, start_time, estimated_duration)
         else:
             logger.warning("Gesture '%s' found but has no keyframes", gesture_name)
     else:
         logger.debug("No valid gesture specified; skipping gesture loop.")
 
+
     # Wait for dialogue to finish.
     yield dialogue_deferred
-
-    session.call("rom.actuator.motor.write", frames=NEUTRAL_POSE_FRAMES, mode="linear", sync=True, force=False)
+    logger.debug("Dialogue finished; say_animated_experimental complete.")

@@ -1,0 +1,184 @@
+{
+  "beat_gesture": {
+    "type": "beat",
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.roll": 0.0,
+          "body.head.pitch": 0.0,
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.right.upper.pitch": 0.0
+        }
+      },
+      {
+        "time": 1000,
+        "data": {
+          "body.head.yaw": 0.1,
+          "body.head.roll": 0.05,
+          "body.head.pitch": -0.10,
+          "body.arms.left.upper.pitch": 0.2,
+          "body.arms.right.upper.pitch": -0.2
+        }
+      },
+      {
+        "time": 2000,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.roll": 0.0,
+          "body.head.pitch": 0.0,
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.right.upper.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "goodbye_wave": {
+    "type": "iconic",
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0
+        }
+      },
+      {
+        "time": 500,
+        "data": {
+          "body.arms.left.upper.pitch": 0.7,
+          "body.arms.left.lower.roll": 0.0
+        }
+      },
+      {
+        "time": 1000,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0
+        }
+      },
+      {
+        "time": 1500,
+        "data": {
+          "body.arms.left.upper.pitch": 0.7,
+          "body.arms.left.lower.roll": 0.0
+        }
+      },
+      {
+        "time": 2000,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0
+        }
+      }
+    ]
+  },
+  "praise_gesture": {
+    "type": "emo",
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.pitch": 0.0,
+          "body.arms.right.upper.pitch": 0.0
+        }
+      },
+      {
+        "time": 500,
+        "data": {
+          "body.head.pitch": -0.15,
+          "body.arms.right.upper.pitch": 0.7
+        }
+      },
+      {
+        "time": 1000,
+        "data": {
+          "body.head.pitch": 0.0,
+          "body.arms.right.upper.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "celebration": {
+    "type": "iconic",
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.right.upper.pitch": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 400,
+        "data": {
+          "body.arms.left.upper.pitch": 1.0,
+          "body.arms.right.upper.pitch": -1.0,
+          "body.head.pitch": -0.3
+        }
+      },
+      {
+        "time": 800,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.right.upper.pitch": 0.0,
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "nod_yes": {
+    "type": "iconic",
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 300,
+        "data": {
+          "body.head.pitch": 0.25
+        }
+      },
+      {
+        "time": 600,
+        "data": {
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "shake_no": {
+    "type": "iconic",
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0
+        }
+      },
+      {
+        "time": 300,
+        "data": {
+          "body.head.yaw": 0.3
+        }
+      },
+      {
+        "time": 600,
+        "data": {
+          "body.head.yaw": -0.3
+        }
+      },
+      {
+        "time": 900,
+        "data": {
+          "body.head.yaw": 0.0
+        }
+      }
+    ]
+  }
+}

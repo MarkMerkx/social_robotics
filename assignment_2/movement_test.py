@@ -18,9 +18,15 @@ def main(session, details):
     stt.logging = False
 
     # Test an animated speech call with a beat gesture.
-    yield say_animated(session, "Hello, I hope you're having a great day!", gesture_name="beat_gesture")
+    # yield say_animated(session, "Hello, I hope you're having a great day!", gesture_name="beat_gesture")
+    # yield sleep(2)
+    yield say_animated(session, "That is correct", gesture_name="nod_yes")
     yield sleep(2)
+    yield say_animated(session, "That is incorrect", gesture_name="shake_no")
+    yield sleep(2)
+    yield say_animated(session, "Hello, I hope you're having a great day!", gesture_name="beat_gesture")
     # Test an animated speech call with an iconic gesture.
+    yield sleep(2)
     yield say_animated(session, "Goodbye!", gesture_name="goodbye_wave")
 
     # Terminate the session after testing.
@@ -33,7 +39,7 @@ wamp = Component(
         "serializers": ["msgpack"],
         "max_retries": 0
     }],
-    realm="rie.67adc40d85ba37f92bb17029",
+    realm="rie.67b30c80aa9b77655979f1b2",
 )
 
 wamp.on_join(main)
