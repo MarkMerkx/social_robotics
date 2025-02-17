@@ -4,6 +4,7 @@ from autobahn.twisted.util import sleep
 from robot_guesses import play_game_robot_guesses
 from user_guesses import play_game_user_guesses
 from game_utils import wait_for_response
+from say_animated import say_animated
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -31,9 +32,9 @@ def play_game(session, stt):
             break
 
         # Ask which mode they want.
-        yield session.call("rie.dialogue.say",
-                           text="Great! Would you like me to guess your word, or would you like to guess my word? "
-                                "Please say 'I guess' if you want to guess my word, or 'You guess' if you want me to guess yours.")
+        yield say_animated(session,
+                           "Great! Would you like me to guess your word, or would you like to guess my word? "
+                                "Please say 'I guess' if you want to guess my word, or 'You guess' if you want me to guess yours.", gesture_name="beat_gesture")
         mode_response = yield wait_for_response("Please choose the game mode.", session, stt, timeout=20)
         logger.debug("Mode selection response: %s", mode_response)
 
