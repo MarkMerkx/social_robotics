@@ -126,6 +126,3 @@ def generate_secret_word():
         logger.error("Error in generate_secret_word: %s", e)
         # Fallback to a random word from a hardcoded list.
         return "apple"
-
-
-
