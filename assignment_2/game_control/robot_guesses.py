@@ -3,9 +3,9 @@ import re
 import string
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from api.api_handler import guess
-from game_utils import wait_for_response
-from say_animated import say_animated
+from ..api.api_handler import guess
+from .game_utils import wait_for_response
+from ..gesture_control.say_animated import say_animated
 
 logger = logging.getLogger(__name__)
 

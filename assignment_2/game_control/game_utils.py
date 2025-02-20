@@ -1,7 +1,7 @@
 import logging
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from say_animated import say_animated
+from assignment_2.gesture_control.say_animated import say_animated
 
 logger = logging.getLogger(__name__)
 

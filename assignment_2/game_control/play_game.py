@@ -1,13 +1,12 @@
 import logging
 from twisted.internet.defer import inlineCallbacks
-from autobahn.twisted.util import sleep
-from robot_guesses import play_game_robot_guesses
-from user_guesses import play_game_user_guesses
-from game_utils import wait_for_response
-from say_animated import say_animated
+from .robot_guesses import play_game_robot_guesses
+from .user_guesses import play_game_user_guesses
+from .game_utils import wait_for_response
+from assignment_2.gesture_control.say_animated import say_animated
 
 logging.basicConfig(
-    format='%(asctime)s %(levelname)-8s %(message)s',
+    format='%(asctime)s GAME HANDLER %(levelname)-8s %(message)s',
     level=logging.DEBUG,
     datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)

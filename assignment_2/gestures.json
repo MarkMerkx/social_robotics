@@ -47,26 +47,33 @@
       {
         "time": 500,
         "data": {
-          "body.arms.left.upper.pitch": 0.7,
+          "body.arms.left.upper.pitch": -2.0,
           "body.arms.left.lower.roll": 0.0
         }
       },
       {
         "time": 1000,
         "data": {
-          "body.arms.left.upper.pitch": 0.0,
-          "body.arms.left.lower.roll": 0.0
+          "body.arms.left.upper.pitch": -2.0,
+          "body.arms.left.lower.roll": -1.5
         }
       },
       {
         "time": 1500,
         "data": {
-          "body.arms.left.upper.pitch": 0.7,
+          "body.arms.left.upper.pitch": -2.0,
           "body.arms.left.lower.roll": 0.0
         }
       },
       {
         "time": 2000,
+        "data": {
+          "body.arms.left.upper.pitch": -1.0,
+          "body.arms.left.lower.roll": -1.5
+        }
+      },
+      {
+        "time": 2500,
         "data": {
           "body.arms.left.upper.pitch": 0.0,
           "body.arms.left.lower.roll": 0.0
@@ -144,8 +151,20 @@
           "body.head.pitch": 0.25
         }
       },
-      {
+            {
         "time": 600,
+        "data": {
+          "body.head.pitch": 0.0
+        }
+      },
+            {
+        "time": 900,
+        "data": {
+          "body.head.pitch": 0.25
+        }
+      },
+      {
+        "time": 1200,
         "data": {
           "body.head.pitch": 0.0
         }

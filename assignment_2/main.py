@@ -2,7 +2,7 @@ from autobahn.twisted.component import Component, run
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
 from twisted.internet.task import LoopingCall
-from play_game import play_game
+from assignment_2.game_control.play_game import play_game
 from alpha_mini_rug.speech_to_text import SpeechToText
 import logging
 
@@ -65,7 +65,7 @@ wamp = Component(
         "serializers": ["msgpack"],
         "max_retries": 0
     }],
-    realm="rie.67b30c80aa9b77655979f1b2",
+    realm="rie.67b7052ba06ea6579d140a02",
 )
 
 wamp.on_join(main)

@@ -2,9 +2,9 @@ import logging
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
 
-from game_utils import wait_for_response
-from api.api_handler import answer_question_with_api, generate_secret_word
-from say_animated import say_animated
+from .game_utils import wait_for_response
+from ..api.api_handler import answer_question_with_api, generate_secret_word
+from assignment_2.gesture_control.say_animated import say_animated
 
 
 @inlineCallbacks

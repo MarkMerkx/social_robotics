@@ -6,17 +6,17 @@ import re
 import time
 from twisted.internet.defer import inlineCallbacks, DeferredList
 from autobahn.twisted.util import sleep
-from alpha_mini_rug import perform_movement  # adjust the import path as needed
+from alpha_mini_rug import perform_movement
 
 logging.basicConfig(
-    format='%(asctime)s %(levelname)-8s %(message)s',
+    format='%(asctime)s GESTURE HANDLER %(levelname)-8s %(message)s',
     level=logging.DEBUG,
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger(__name__)
 
 # Load the gesture library once.
-GESTURE_FILE = os.path.join(os.path.dirname(__file__), "gestures.json")
+GESTURE_FILE = os.path.join(os.path.dirname(__file__), "../gestures.json")
 try:
     with open(GESTURE_FILE, "r") as f:
         GESTURE_LIBRARY = json.load(f)
@@ -81,11 +81,8 @@ def loop_gesture(session, frames, dialogue_deferred, start_time, estimated_durat
 
         iteration += 1
 
-        # (1) If you know how to compute actual motion time:
-        # movement_duration = get_required_time(frames)
-        # If not, pick something like movement_duration = 2.0
 
-        movement_duration = 2.0  # e.g. if your keyframes are ~2 seconds total
+        movement_duration = 2.0
         noisy_frames = add_noise_to_frames(frames)
 
         # (2) Start the motion in async mode if your library is truly asynchronous:
@@ -121,7 +118,6 @@ def say_animated(session, text, gesture_name=None):
         gesture_frames = GESTURE_LIBRARY[gesture_name].get("keyframes", [])
         if gesture_frames:
             logger.debug("Starting gesture loop for '%s'", gesture_name)
-            # Notice we must *yield* here to actually wait in a single linear flow:
             yield loop_gesture(session, gesture_frames, dialogue_deferred, start_time, estimated_duration)
         else:
             logger.warning("Gesture '%s' found but has no keyframes", gesture_name)
