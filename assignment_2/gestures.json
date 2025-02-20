@@ -114,23 +114,59 @@
         "time": 0,
         "data": {
           "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0,
           "body.arms.right.upper.pitch": 0.0,
+          "body.arms.right.lower.roll": 0.0,
           "body.head.pitch": 0.0
         }
       },
       {
-        "time": 400,
+        "time": 1500,
         "data": {
-          "body.arms.left.upper.pitch": 1.0,
-          "body.arms.right.upper.pitch": -1.0,
+          "body.arms.left.upper.pitch": -2.59,
+          "body.arms.left.lower.roll": 0.0,
+          "body.arms.right.upper.pitch": -2.59,
+          "body.arms.right.lower.roll": 0.0,
           "body.head.pitch": -0.3
         }
       },
       {
-        "time": 800,
+        "time": 2000,
+        "data": {
+          "body.arms.left.upper.pitch": -2.59,
+          "body.arms.left.lower.roll": -0.74,
+          "body.arms.right.upper.pitch": -2.59,
+          "body.arms.right.lower.roll": -0.74,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 2500,
+        "data": {
+          "body.arms.left.upper.pitch": -2.59,
+          "body.arms.left.lower.roll": 0.0,
+          "body.arms.right.upper.pitch": -2.59,
+          "body.arms.right.lower.roll": 0.0,
+          "body.head.pitch": -0.3
+        }
+      },
+            {
+        "time": 3000,
+        "data": {
+          "body.arms.left.upper.pitch": -2.59,
+          "body.arms.left.lower.roll": -0.74,
+          "body.arms.right.upper.pitch": -2.59,
+          "body.arms.right.lower.roll": -0.74,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 4500,
         "data": {
           "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0,
           "body.arms.right.upper.pitch": 0.0,
+          "body.arms.right.lower.roll": 0.0,
           "body.head.pitch": 0.0
         }
       }
@@ -151,13 +187,13 @@
           "body.head.pitch": 0.25
         }
       },
-            {
+      {
         "time": 600,
         "data": {
           "body.head.pitch": 0.0
         }
       },
-            {
+      {
         "time": 900,
         "data": {
           "body.head.pitch": 0.25
@@ -194,6 +230,18 @@
       },
       {
         "time": 900,
+        "data": {
+          "body.head.yaw": 0.3
+        }
+      },
+      {
+        "time": 1200,
+        "data": {
+          "body.head.yaw": -0.3
+        }
+      },
+      {
+        "time": 1500,
         "data": {
           "body.head.yaw": 0.0
         }

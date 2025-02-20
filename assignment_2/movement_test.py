@@ -22,12 +22,17 @@ def main(session, details):
     # yield sleep(2)
     # yield say_animated(session, "That is correct", gesture_name="nod_yes")
     # yield sleep(2)
-    yield say_animated(session, "That is incorrect", gesture_name="shake_no")
+    yield say_animated(session, "Hooray, I've guessed it", gesture_name="celebration")
     yield sleep(2)
+    #
+    # yield say_animated(session,
+    #                    "Great! Would you like me to guess your word, or would you like to guess my word? "
+    #                    "Please say 'I guess' if you want to guess my word, or 'You guess' if you want me to guess yours.",
+    #                    gesture_name="beat_gesture")
     # yield say_animated(session, "Hello, I hope you're having a great day!", gesture_name="beat_gesture")
     # Test an animated speech call with an iconic gesture.
     # yield sleep(2)
-    yield say_animated(session, "Goodbye!", gesture_name="goodbye_wave")
+    # yield say_animated(session, "Goodbye!", gesture_name="goodbye_wave")
 
     # Terminate the session after testing.
     session.leave()
