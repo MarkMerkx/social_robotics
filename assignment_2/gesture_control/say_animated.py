@@ -28,20 +28,6 @@ except Exception as e:
     logger.error("Could not load gesture library: %s", e)
     GESTURE_LIBRARY = {}
 
-# Define a neutral pose for head and arms.
-NEUTRAL_POSE_FRAMES = [
-    {
-        "time": 0.0,
-        "data": {
-            "body.head.yaw": 0.0,
-            "body.head.roll": 0.0,
-            "body.head.pitch": 0.0,
-            "body.arms.left.upper.pitch": 0.0,
-            "body.arms.right.upper.pitch": 0.0
-        }
-    }
-]
-
 
 @inlineCallbacks
 def loop_gesture(session, dialogue_deferred, start_time, estimated_duration):
