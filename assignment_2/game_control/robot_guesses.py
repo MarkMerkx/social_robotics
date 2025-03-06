@@ -3,9 +3,9 @@ import re
 import string
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from ..api.api_handler import guess
-from .game_utils import wait_for_response
-from ..gesture_control.say_animated import say_animated
+from api.api_handler import guess
+from game_control.game_utils import wait_for_response
+from gesture_control.say_animated import say_animated
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def play_game_robot_guesses(session, stt):
     yield session.call("rie.dialogue.say", text="Let's start!")
     logger.debug("User confirmed readiness. Starting guessing rounds.")
     last_feedback = ""
-    max_rounds = 15
+    max_rounds = 7
     round_counter = 0
 
     while round_counter < max_rounds:
@@ -48,10 +48,10 @@ def play_game_robot_guesses(session, stt):
 
         # Robot speaks the question.
         yield say_animated(session, clean_guess, gesture_name="beat_gesture")
-        yield sleep(3)
+        yield sleep(5)
 
         # Wait for the user's answer.
-        feedback = yield wait_for_response(None, session, stt)
+        feedback = yield wait_for_response(None, session, stt, timeout=20)
         if not feedback:
             feedback = "No response"
             logger.debug("No feedback received; defaulting to: %s", feedback)
@@ -63,7 +63,7 @@ def play_game_robot_guesses(session, stt):
 
         # Clean feedback (remove punctuation) for a robust match.
         feedback_cleaned = feedback.lower().translate(str.maketrans("", "", string.punctuation))
-        win_keywords = ["correct", "yes thats it", "exactly", "yes you guessed it"]
+        win_keywords = ["that is correct", "yes thats it", "exactly", "yes you guessed it"]
         if any(affirm in feedback_cleaned for affirm in win_keywords):
             yield say_animated(session, "Yay! I guessed it!", gesture_name="celebration")
             logger.debug("User confirmed correct guess. Ending game.")
@@ -73,8 +73,8 @@ def play_game_robot_guesses(session, stt):
             logger.debug("Continuing game with last feedback: %s", last_feedback)
 
     if round_counter >= max_rounds:
-        yield say_animated(session, "I give up! That was a challenging word.", gesture_name="shake_no")
+        yield say_animated(session, "I give up! That was a challenging word.", gesture_name="defeat")
         logger.debug("Reached maximum rounds; game over.")
 
-    yield say_animated(session, "Thanks for playing!", gesture_name="beat_gesture")
+    yield say_animated(session, "Thanks for playing!", gesture_name="goodbye_wave")
     logger.debug("Game ended. Thank you for playing!")
