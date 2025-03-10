@@ -1,3 +1,4 @@
+# /gesture_control/generate_frames.py
 import random
 
 # Only the head and arms, removing legs since they're not being used.
