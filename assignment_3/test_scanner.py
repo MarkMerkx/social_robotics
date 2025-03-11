@@ -1,202 +1,244 @@
-# test_scanner.py
 """
-Standalone test script to verify the object scanning and recognition functionality
-without running the full I Spy game.
+Test scanner for the robot vision system.
 
-This can be run directly to test the scanner component in isolation.
+Tests the object scanning and recognition functionality with options for
+both static field of view and 360-degree scanning modes.
 """
 
-import os
-import sys
-import random
-import argparse
-import logging
 from autobahn.twisted.component import Component, run
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
+import logging
+import os
+import argparse
 
-# Make sure the assignment_3 package is in the Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
-
-# Import the scanner module
-from assignment_3.vision.scanning import ObjectScanner
-from assignment_3.vision.debug_ui import DebugServer, save_debug_data
-from assignment_3.gesture_control.scanning_gestures import (
-    perform_scan_gesture,
-    perform_scan_360,
-    perform_point_to
+# Import modules
+from vision.image_capture import initialize_image_directory, capture_image
+from vision.object_recognition import initialize_object_directory, detect_objects, get_unique_objects
+from gesture_control.scanning import (
+    perform_scan,
+    point_to_object,
+    MODE_STATIC,
+    MODE_360
 )
+from utils.helpers import setup_logging, format_object_list, process_detected_objects
+
+# Create directories for modules if they don't exist
+os.makedirs("vision", exist_ok=True)
+os.makedirs("gesture_control", exist_ok=True)
+os.makedirs("utils", exist_ok=True)
+
+# Create __init__.py files to ensure imports work
+for directory in ["vision", "gesture_control", "utils"]:
+    init_file = os.path.join(directory, "__init__.py")
+    if not os.path.exists(init_file):
+        with open(init_file, "w") as f:
+            pass
 
 # Set up logging
-logging.basicConfig(
-    format='%(asctime)s SCANNER TEST %(levelname)-8s %(message)s',
-    level=logging.DEBUG,
-    datefmt='%H:%M:%S'
-)
+setup_logging()
 logger = logging.getLogger(__name__)
 
-# Create debug UI server
-debug_server = DebugServer(port=8080)
+# Create output directories
+initialize_image_directory()
+initialize_object_directory()
 
 
 @inlineCallbacks
-def test_scanning(session):
+def capture_and_analyze(session, yaw, pitch, **kwargs):
     """
-    Run a test scan and display the results.
+    Capture an image at the given position and analyze it for objects.
+
+    :param session: The WAMP session
+    :type session: Component
+    :param yaw: Yaw angle in radians
+    :type yaw: float
+    :param pitch: Pitch angle in radians
+    :type pitch: float
+    :return: Dictionary of detected objects
+    :rtype: dict
     """
-    logger.info("Starting scanner test")
-
-    # Initialize the scanner
-    scanner = ObjectScanner(session)
-
-    # Make the robot aware we're in test mode
-    yield session.call("rie.dialogue.say", text="Starting scanner test mode")
-    yield sleep(2)
-
-    # Start the debug server
-    debug_server.start()
-
-    # Perform the scan
     try:
-        logger.info("Beginning environmental scan")
-        yield session.call("rie.dialogue.say", text="Starting to scan the environment")
-        yield sleep(1)
+        # Capture image
+        result = yield capture_image(session, yaw, pitch)
 
-        # Test the scanning gesture first
-        yield perform_scan_gesture(session)
-        yield sleep(1)
+        if not result:
+            logger.warning("Failed to capture image")
+            return {}
 
-        # Then perform the full scan
-        detected_objects = yield scanner.perform_full_scan()
+        image, _ = result
 
-        yield session.call("rie.dialogue.say", text=f"Scan complete. Found {len(detected_objects)} objects.")
-        logger.info(f"Scan complete. Found {len(detected_objects)} unique objects")
+        # Create position info
+        position_info = {
+            'yaw': yaw,
+            'pitch': pitch,
+            'turn': kwargs.get('turn', 0),
+            'cumulative_rotation': kwargs.get('cumulative_rotation', 0)
+        }
 
-        # Update debug UI with results
-        debug_server.update_data(detected_objects, scanner.image_buffer)
+        # Detect objects in the image
+        objects, _ = detect_objects(image, position_info)
 
-        # Also save to disk for later inspection
-        save_debug_data(detected_objects, scanner.image_buffer)
-
-        # If objects were found, demonstrate pointing to a random object
-        if detected_objects:
-            random_object = random.choice(list(detected_objects.keys()))
-            logger.info(f"Demonstrating pointing to: {random_object}")
-
-            yield session.call("rie.dialogue.say", text=f"I will now point to the {random_object}")
-            yield sleep(1)
-
-            yield scanner.point_to_object(random_object)
-            yield sleep(3)
-
-            # Reset head position
-            yield scanner._reset_head_position()
+        return objects
 
     except Exception as e:
-        logger.error(f"Error during scanner test: {e}")
-        yield session.call("rie.dialogue.say", text="An error occurred during the scan test")
-
-    # Keep the server running for manual inspection
-    logger.info("Test complete. Debug UI server running at http://localhost:8080")
-    logger.info("Press Ctrl+C to exit")
-
-    # Keep session alive
-    while True:
-        yield sleep(1)
+        logger.error(f"Error in capture_and_analyze: {e}")
+        return {}
 
 
 @inlineCallbacks
-def test_individual_gestures(session):
+def test_single_image(session):
+    """Test capturing and analyzing a single image."""
+    logger.info("Testing single image capture and analysis")
+
+    # Capture image
+    result = yield capture_image(session)
+    if result:
+        image, filename = result
+        logger.info(f"Captured test image: {filename}")
+
+        # Detect objects
+        objects, annotated_path = detect_objects(image)
+
+        if objects:
+            logger.info(f"Detected {len(objects)} objects in test image")
+            for obj_id, obj_data in objects.items():
+                logger.info(f"  {obj_data['name']} (confidence: {obj_data['confidence']:.2f})")
+        else:
+            logger.info("No objects detected in test image")
+
+        return True
+    else:
+        logger.warning("Failed to capture test image")
+        return False
+
+
+@inlineCallbacks
+def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True):
     """
-    Test individual scanning gestures.
+    Run a complete scan test with the specified mode.
+
+    :param session: The WAMP session
+    :type session: Component
+    :param scan_mode: Scan mode ("static" or "360")
+    :type scan_mode: str
+    :param point_enabled: Whether to point to detected objects
+    :type point_enabled: bool
+    :return: Dictionary with scan results
+    :rtype: dict
     """
-    logger.info("Testing individual scanning gestures")
+    mode_name = "360-degree" if scan_mode == MODE_360 else "static"
+    logger.info(f"Starting {mode_name} scan test")
 
-    # Make the robot aware we're in test mode
-    yield session.call("rie.dialogue.say", text="Testing scanning gestures")
-    yield sleep(1)
+    # Announce start of scan
+    yield session.call("rie.dialogue.say", text=f"Starting {mode_name} environment scan")
 
-    # Test scan gesture
-    yield session.call("rie.dialogue.say", text="Testing scan gesture")
-    yield perform_scan_gesture(session)
-    yield sleep(2)
+    # Perform the scan using the capture_and_analyze function
+    scan_results, all_objects = yield perform_scan(
+        session,
+        mode=scan_mode,
+        capture_callback=capture_and_analyze,
+        process_callback=process_detected_objects
+    )
 
-    # Test 360 scan
-    yield session.call("rie.dialogue.say", text="Testing 360 scan")
-    yield perform_scan_360(session)
-    yield sleep(2)
+    # Get unique objects for reporting
+    unique_objects = get_unique_objects(all_objects)
+    object_count = len(unique_objects)
 
-    # Test pointing gestures
-    yield session.call("rie.dialogue.say", text="Testing pointing to the left")
-    yield perform_point_to(session, 30)  # Point 30 degrees to the left
-    yield sleep(2)
+    # Report results
+    if object_count > 0:
+        formatted_objects = format_object_list(unique_objects)
+        result_text = f"I found {object_count} different objects including {formatted_objects}"
+        logger.info(f"Scan complete. {result_text}")
+        yield session.call("rie.dialogue.say", text=result_text)
 
-    yield session.call("rie.dialogue.say", text="Testing pointing to the right")
-    yield perform_point_to(session, -30)  # Point 30 degrees to the right
-    yield sleep(2)
+        # If objects were found and pointing is enabled, point to the first one as a demo
+        if len(all_objects) > 0 and point_enabled:
+            # Get first object's position
+            first_obj = next(iter(all_objects.values()))
+            if 'position' in first_obj:
+                pos = first_obj['position']
+                obj_name = first_obj['name']
 
-    # Reset position
-    yield session.call("rom.motion.joint.move", joint="body.head.yaw", angle=0.0, speed=0.5)
-    yield session.call("rom.motion.joint.move", joint="body.head.pitch", angle=0.0, speed=0.5)
-    yield session.call("rom.motion.joint.move", joint="body.arms.left.upper.pitch", angle=0.0, speed=0.5)
-    yield session.call("rom.motion.joint.move", joint="body.arms.right.upper.pitch", angle=0.0, speed=0.5)
+                # Calculate pointing angle, accounting for cumulative rotation if in 360 mode
+                pointing_angle = pos['yaw']
+                if 'cumulative_rotation' in pos and scan_mode == MODE_360:
+                    # Adjust for the robot's rotation
+                    pointing_angle = pointing_angle + pos['cumulative_rotation']
 
-    yield session.call("rie.dialogue.say", text="Gesture tests complete")
-    logger.info("Gesture tests complete")
+                # Point to the object
+                logger.info(f"Pointing to {obj_name} at angle {pointing_angle}")
+                yield session.call("rie.dialogue.say", text=f"I'll point to the {obj_name}")
+                yield point_to_object(session, pointing_angle, pos['pitch'])
+        elif not point_enabled:
+            logger.info("Pointing is disabled, skipping point gesture")
+    else:
+        logger.info("Scan complete. No objects detected.")
+        yield session.call("rie.dialogue.say", text="Scan complete. I didn't detect any objects")
+
+    # Return the results
+    return {
+        "positions_scanned": len(scan_results),
+        "objects_detected": all_objects,
+        "unique_objects": unique_objects
+    }
 
 
 @inlineCallbacks
 def main(session, details):
-    """
-    Main function called when the WAMP session is joined.
-    """
-    logger.info("WAMP session joined")
+    """Main entry point when the WAMP session is established."""
+    logger.info("WAMP session established")
 
-    # Optional behavior: play an initial animation
-    yield session.call("rom.optional.behavior.play", name="BlocklyCrouch")
-    yield session.call("rie.dialogue.say", text="Initializing scanner test...")
+    # Get the scan mode from command line arguments
+    scan_mode = MODE_360 if args.mode == '360' else MODE_STATIC
+
+    # Wait for a moment to ensure everything is initialized
     yield sleep(2)
 
-    # Parse command line arguments to determine test mode
-    if args.gestures_only:
-        # Test just the gestures
-        yield test_individual_gestures(session)
-    else:
-        # Run the full scanner test
-        yield test_scanning(session)
+    # Test a single image capture first
+    yield test_single_image(session)
 
-    # Keep the session alive
-    while True:
-        yield sleep(1)
+    # Run the full scan test with pointing enabled/disabled based on command line argument
+    scan_results = yield run_scan_test(
+        session,
+        scan_mode=scan_mode,
+        point_enabled=not args.no_point
+    )
+
+    # Report final results
+    positions_scanned = scan_results["positions_scanned"]
+    objects_count = len(scan_results["unique_objects"])
+    logger.info(f"Test complete. Scanned {positions_scanned} positions, detected {objects_count} unique objects")
+
+    # Keep the session alive for a moment
+    logger.info("Tests completed. Keeping session alive for 10 seconds...")
+    yield sleep(10)
+
+    logger.info("Test script finished")
 
 
 if __name__ == "__main__":
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Test the object scanner component")
-    parser.add_argument("--realm", default="rie.67b7052ba06ea6579d140a02",
-                        help="WAMP realm to connect to")
-    parser.add_argument("--url", default="ws://wamp.robotsindeklas.nl",
-                        help="WebSocket URL to connect to")
-    parser.add_argument("--gestures-only", action="store_true",
-                        help="Test only the scanning gestures without object detection")
+    parser = argparse.ArgumentParser(description="Test scanner for robot vision")
+    parser.add_argument('--no-point', action='store_true', default=False,
+                        help='Disable pointing to detected objects')
 
+    parser.add_argument('--mode', choices=['static', '360'], default='360',
+                        help='Scan mode: static (head movement only) or 360 (full rotation)')
     args = parser.parse_args()
 
     # Configure WAMP component
     wamp = Component(
         transports=[{
-            "url": args.url,
+            "url": "ws://wamp.robotsindeklas.nl",
             "serializers": ["msgpack"],
             "max_retries": 0
         }],
-        realm=args.realm,
+        realm="rie.67cff07599b259cf43b04548",
     )
 
-    # Register the main function to be called when the session is established
+    # Register the main function
     wamp.on_join(main)
 
     # Run the component
-    logger.info(f"Connecting to {args.url}, realm {args.realm}")
     run([wamp])

@@ -1,0 +1,205 @@
+{
+  "scanning_gesture": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0,
+          "body.head.roll": 0.0
+        }
+      },
+      {
+        "time": 960,
+        "data": {
+          "body.head.yaw": 0.6,
+          "body.head.pitch": 0.0,
+          "body.head.roll": 0.0
+        }
+      },
+      {
+        "time": 1920,
+        "data": {
+          "body.head.yaw": -0.6,
+          "body.head.pitch": 0.0,
+          "body.head.roll": 0.0
+        }
+      },
+      {
+        "time": 2880,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0,
+          "body.head.roll": 0.0
+        }
+      }
+    ]
+  },
+  "move_head": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "yaw_movement": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0
+        }
+      },
+      {
+        "time": 1200,
+        "data": {
+          "body.head.yaw": 0.0
+        }
+      }
+    ]
+  },
+  "pitch_movement": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 600,
+        "data": {
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "head_movement": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "point_left": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 1200,
+        "data": {
+          "body.arms.left.upper.pitch": -1.5,
+          "body.arms.left.lower.roll": -0.7,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 3600,
+        "data": {
+          "body.arms.left.upper.pitch": -1.5,
+          "body.arms.left.lower.roll": -0.7,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 4800,
+        "data": {
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "point_right": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.arms.right.upper.pitch": 0.0,
+          "body.arms.right.lower.roll": 0.0,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 1200,
+        "data": {
+          "body.arms.right.upper.pitch": -1.5,
+          "body.arms.right.lower.roll": -0.7,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 3600,
+        "data": {
+          "body.arms.right.upper.pitch": -1.5,
+          "body.arms.right.lower.roll": -0.7,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 4800,
+        "data": {
+          "body.arms.right.upper.pitch": 0.0,
+          "body.arms.right.lower.roll": 0.0,
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  },
+  "reset_position": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0,
+          "body.arms.left.upper.pitch": 0.0,
+          "body.arms.left.lower.roll": 0.0,
+          "body.arms.right.upper.pitch": 0.0,
+          "body.arms.right.lower.roll": 0.0
+        }
+      }
+    ]
+  },
+  "final_movement": {
+    "keyframes": [
+      {
+        "time": 0,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      },
+      {
+        "time": 1200,
+        "data": {
+          "body.head.yaw": 0.0,
+          "body.head.pitch": 0.0
+        }
+      }
+    ]
+  }
+}

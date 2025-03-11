@@ -3,3 +3,6 @@
 /.idea
 *.pyc
 /assignment_2/.idea
+/assignment_3/detected_objects
+/assignment_3/scan_images
+assignment_3/yolov8n.pt

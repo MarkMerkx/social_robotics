@@ -22,7 +22,7 @@ def main(session, details):
     # yield sleep(2)
     # yield say_animated(session, "That is correct", gesture_name="nod_yes")
     # yield sleep(2)
-    yield say_animated(session, "Hooray, I've guessed it", gesture_name="celebration")
+    yield session.call("rom.optional.behavior.play", name="BlocklyCrouch")
     yield sleep(2)
     #
     # yield say_animated(session,
@@ -44,7 +44,7 @@ wamp = Component(
         "serializers": ["msgpack"],
         "max_retries": 0
     }],
-    realm="rie.67b7052ba06ea6579d140a02",
+    realm="rie.67cff07599b259cf43b04548",
 )
 
 wamp.on_join(main)
