@@ -20,4 +20,4 @@ dotenv_path = find_dotenv()
 load_dotenv(dotenv_path, override=True)
 
 def chat_gtp_connection():
-    return os.getenv('CHATGTP_API')
+    return os.getenv('OPENAI_API_KEY')

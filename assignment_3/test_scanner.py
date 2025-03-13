@@ -14,7 +14,7 @@ import argparse
 
 # Import modules
 from vision.image_capture import initialize_image_directory, capture_image
-from vision.object_recognition import initialize_object_directory, detect_objects, get_unique_objects
+from vision.object_recognition import initialize_object_directory, detect_objects, get_unique_objects, save_detection_results
 from gesture_control.scanning import (
     perform_scan,
     point_to_object,
@@ -68,16 +68,21 @@ def capture_and_analyze(session, yaw, pitch, **kwargs):
 
         image, _ = result
 
-        # Create position info
+        # Create comprehensive position info for the I Spy game
         position_info = {
             'yaw': yaw,
             'pitch': pitch,
             'turn': kwargs.get('turn', 0),
-            'cumulative_rotation': kwargs.get('cumulative_rotation', 0)
+            'cumulative_rotation': kwargs.get('cumulative_rotation', 0),
+            'orientation': kwargs.get('orientation', 'middle'),
+            'position_id': kwargs.get('position_id', f"{kwargs.get('turn', 0)}_{kwargs.get('orientation', 'middle')}")
         }
 
-        # Detect objects in the image
-        objects, _ = detect_objects(image, position_info)
+        # For I Spy game, we primarily want to use ChatGPT Vision for better feature detection
+        use_chatgpt = True
+
+        # Detect objects in the image with position info
+        objects, annotated_path = detect_objects(image, position_info=position_info, use_chatgpt=use_chatgpt)
 
         return objects
 
@@ -87,9 +92,22 @@ def capture_and_analyze(session, yaw, pitch, **kwargs):
 
 
 @inlineCallbacks
-def test_single_image(session):
-    """Test capturing and analyzing a single image."""
+def test_single_image(session, use_chatgpt=True):
+    """
+    Test capturing and analyzing a single image.
+
+    :param session: The WAMP session
+    :type session: Component
+    :param use_chatgpt: Whether to use ChatGPT Vision API for enhanced detection
+    :type use_chatgpt: bool
+    :return: Success flag
+    :rtype: bool
+    """
     logger.info("Testing single image capture and analysis")
+
+    # Whether ChatGPT Vision API should be used
+    chatgpt_status = "enabled" if use_chatgpt else "disabled"
+    logger.info(f"ChatGPT Vision API is {chatgpt_status} for this test")
 
     # Capture image
     result = yield capture_image(session)
@@ -97,13 +115,57 @@ def test_single_image(session):
         image, filename = result
         logger.info(f"Captured test image: {filename}")
 
-        # Detect objects
-        objects, annotated_path = detect_objects(image)
+        # Detect objects with optional ChatGPT Vision API
+        objects, annotated_path = detect_objects(image, use_chatgpt=use_chatgpt)
 
         if objects:
             logger.info(f"Detected {len(objects)} objects in test image")
-            for obj_id, obj_data in objects.items():
-                logger.info(f"  {obj_data['name']} (confidence: {obj_data['confidence']:.2f})")
+
+            # Group objects by source for better reporting
+            yolo_objects = [obj for obj_id, obj in objects.items()
+                            if obj.get('source', '') == 'yolo']
+
+            gpt_objects = [obj for obj_id, obj in objects.items()
+                           if obj.get('source', '') == 'chatgpt']
+
+            # Log YOLO detections
+            if yolo_objects:
+                logger.info(f"YOLO detected {len(yolo_objects)} objects:")
+                for obj in yolo_objects:
+                    logger.info(f"  {obj['name']} (confidence: {obj['confidence']:.2f})")
+
+            # Log ChatGPT Vision detections
+            if gpt_objects:
+                logger.info(f"ChatGPT Vision detected {len(gpt_objects)} objects:")
+                for obj in gpt_objects:
+                    desc = obj.get('description', 'No description')
+                    logger.info(f"  {obj['name']} (confidence: {obj['confidence']:.2f})")
+                    logger.info(f"    Description: {desc}")
+
+            # Save detection results to file for detailed analysis
+            save_detection_results(objects)
+
+            # Show comparison message if both methods were used
+            if yolo_objects and gpt_objects:
+                logger.info(f"Comparison: YOLO found {len(yolo_objects)} objects, ChatGPT found {len(gpt_objects)}")
+
+                # Find objects detected by both methods
+                yolo_names = set(obj['name'].lower() for obj in yolo_objects)
+                gpt_names = set(obj['name'].lower() for obj in gpt_objects)
+                common_names = yolo_names.intersection(gpt_names)
+
+                if common_names:
+                    logger.info(f"Both methods detected: {', '.join(common_names)}")
+
+                # Find unique detections
+                yolo_unique = yolo_names - gpt_names
+                gpt_unique = gpt_names - yolo_names
+
+                if yolo_unique:
+                    logger.info(f"Only YOLO detected: {', '.join(yolo_unique)}")
+
+                if gpt_unique:
+                    logger.info(f"Only ChatGPT detected: {', '.join(gpt_unique)}")
         else:
             logger.info("No objects detected in test image")
 
@@ -114,9 +176,9 @@ def test_single_image(session):
 
 
 @inlineCallbacks
-def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True):
+def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty=1):
     """
-    Run a complete scan test with the specified mode.
+    Run a complete scan test with the specified mode and select an object for the I Spy game.
 
     :param session: The WAMP session
     :type session: Component
@@ -124,7 +186,9 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True):
     :type scan_mode: str
     :param point_enabled: Whether to point to detected objects
     :type point_enabled: bool
-    :return: Dictionary with scan results
+    :param difficulty: Difficulty level for object selection (1-3)
+    :type difficulty: int
+    :return: Dictionary with scan results and selected object
     :rtype: dict
     """
     mode_name = "360-degree" if scan_mode == MODE_360 else "static"
@@ -152,26 +216,42 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True):
         logger.info(f"Scan complete. {result_text}")
         yield session.call("rie.dialogue.say", text=result_text)
 
-        # If objects were found and pointing is enabled, point to the first one as a demo
-        if len(all_objects) > 0 and point_enabled:
-            # Get first object's position
-            first_obj = next(iter(all_objects.values()))
-            if 'position' in first_obj:
-                pos = first_obj['position']
-                obj_name = first_obj['name']
+        # Select an object for the I Spy game based on difficulty
+        from assignment_3.api.api_handler import choose_object
 
-                # Calculate pointing angle, accounting for cumulative rotation if in 360 mode
-                pointing_angle = pos['yaw']
-                if 'cumulative_rotation' in pos and scan_mode == MODE_360:
-                    # Adjust for the robot's rotation
-                    pointing_angle = pointing_angle + pos['cumulative_rotation']
+        selected_object = choose_object(all_objects, difficulty)
 
-                # Point to the object
-                logger.info(f"Pointing to {obj_name} at angle {pointing_angle}")
-                yield session.call("rie.dialogue.say", text=f"I'll point to the {obj_name}")
-                yield point_to_object(session, pointing_angle, pos['pitch'])
-        elif not point_enabled:
-            logger.info("Pointing is disabled, skipping point gesture")
+        if selected_object:
+            logger.info(
+                f"Selected object for I Spy game: {selected_object['name']} ({selected_object.get('dutch_name', 'unknown')})")
+            logger.info(f"Object features: {selected_object.get('features', {})}")
+            logger.info(f"Object position: {selected_object.get('position_id', 'unknown')}")
+
+            # Start the I Spy game (this will be handled by another module)
+            yield session.call("rie.dialogue.say", text=f"Let's play I Spy! I'm thinking of something in this room.")
+
+            # Store the selected object for the game logic
+            game_object = {
+                "name": selected_object['name'],
+                "dutch_name": selected_object.get('dutch_name', ''),
+                "features": selected_object.get('features', {}),
+                "position_id": selected_object.get('position_id', ''),
+                "orientation": selected_object.get('orientation', ''),
+                "turn": selected_object.get('turn', 0),
+                "yaw": selected_object.get('yaw', 0),
+                "pitch": selected_object.get('pitch', 0),
+                "cumulative_rotation": selected_object.get('cumulative_rotation', 0)
+            }
+
+            # Save the game object to a file for later use
+            try:
+                with open('current_game_object.json', 'w') as f:
+                    json.dump(game_object, f, indent=2)
+                logger.info("Saved game object to current_game_object.json")
+            except Exception as e:
+                logger.error(f"Error saving game object: {e}")
+        else:
+            logger.warning("Failed to select an object for the I Spy game")
     else:
         logger.info("Scan complete. No objects detected.")
         yield session.call("rie.dialogue.say", text="Scan complete. I didn't detect any objects")
@@ -180,7 +260,8 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True):
     return {
         "positions_scanned": len(scan_results),
         "objects_detected": all_objects,
-        "unique_objects": unique_objects
+        "unique_objects": unique_objects,
+        "selected_object": selected_object if object_count > 0 and selected_object else None
     }
 
 
@@ -192,6 +273,9 @@ def main(session, details):
     # Get the scan mode from command line arguments
     scan_mode = MODE_360 if args.mode == '360' else MODE_STATIC
 
+    # Get difficulty level
+    difficulty = args.difficulty
+
     # Wait for a moment to ensure everything is initialized
     yield sleep(2)
 
@@ -199,16 +283,23 @@ def main(session, details):
     yield test_single_image(session)
 
     # Run the full scan test with pointing enabled/disabled based on command line argument
+    # and include the difficulty parameter for object selection
     scan_results = yield run_scan_test(
         session,
         scan_mode=scan_mode,
-        point_enabled=not args.no_point
+        point_enabled=not args.no_point,
+        difficulty=difficulty
     )
 
     # Report final results
     positions_scanned = scan_results["positions_scanned"]
     objects_count = len(scan_results["unique_objects"])
     logger.info(f"Test complete. Scanned {positions_scanned} positions, detected {objects_count} unique objects")
+
+    # Report selected object for the I Spy game
+    if "selected_object" in scan_results and scan_results["selected_object"]:
+        selected_obj = scan_results["selected_object"]
+        logger.info(f"Selected object for I Spy game: {selected_obj['name']} ({selected_obj.get('dutch_name', '')})")
 
     # Keep the session alive for a moment
     logger.info("Tests completed. Keeping session alive for 10 seconds...")
@@ -222,9 +313,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test scanner for robot vision")
     parser.add_argument('--no-point', action='store_true', default=False,
                         help='Disable pointing to detected objects')
-
     parser.add_argument('--mode', choices=['static', '360'], default='360',
                         help='Scan mode: static (head movement only) or 360 (full rotation)')
+    parser.add_argument('--difficulty', type=int, choices=[1, 2, 3], default=1,
+                        help='Difficulty level for the I Spy game (1=easy, 2=medium, 3=hard)')
     args = parser.parse_args()
 
     # Configure WAMP component
@@ -234,7 +326,7 @@ if __name__ == "__main__":
             "serializers": ["msgpack"],
             "max_retries": 0
         }],
-        realm="rie.67cff07599b259cf43b04548",
+        realm="rie.67d2ae3c99b259cf43b05300",
     )
 
     # Register the main function

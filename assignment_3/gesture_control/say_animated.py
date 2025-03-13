@@ -9,8 +9,8 @@ from autobahn.twisted.util import sleep
 from alpha_mini_rug import perform_movement
 
 # Import the new gesture generation and smoothing functions.
-from ..gesture_control.generate_frames import generate_beat_frames
-from ..gesture_control.smoothing import smooth_predefined_frames, smooth_keyframes
+from gesture_control.generate_frames import generate_beat_frames
+from gesture_control.smoothing import smooth_predefined_frames, smooth_keyframes
 
 logging.basicConfig(
     format='%(asctime)s GESTURE HANDLER %(levelname)-8s %(message)s',

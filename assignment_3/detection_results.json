@@ -1,0 +1,20 @@
+{
+  "gpt_monitor_0": {
+    "name": "monitor",
+    "confidence": 0.9,
+    "source": "chatgpt",
+    "description": "A monitor is visible, likely used for computer display."
+  },
+  "gpt_desk_1": {
+    "name": "desk",
+    "confidence": 0.85,
+    "source": "chatgpt",
+    "description": "A wooden desk is present, serving as a workspace."
+  },
+  "gpt_cables_2": {
+    "name": "cables",
+    "confidence": 0.75,
+    "source": "chatgpt",
+    "description": "Various cables are seen, likely for connection between devices."
+  }
+}

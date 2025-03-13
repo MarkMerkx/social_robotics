@@ -65,13 +65,17 @@ def move_head_to_position(session, yaw, pitch, move_time=1500):
     :rtype: bool
     """
     try:
-        # Calculate appropriate movement time based on angle difference
-        # Use a conservative timing approach to avoid timing recalculation by the robot
-
-        # Create movement frames for head position
+        # Create movement frames for head position with explicit time values
         frames = [
             {
-                "time": 0,
+                "time": 0,  # Start time
+                "data": {
+                    "body.head.yaw": 0.0,  # Start from current position or center
+                    "body.head.pitch": 0.0
+                }
+            },
+            {
+                "time": move_time,  # End time in milliseconds
                 "data": {
                     "body.head.yaw": yaw,
                     "body.head.pitch": pitch
@@ -80,6 +84,7 @@ def move_head_to_position(session, yaw, pitch, move_time=1500):
         ]
 
         # Execute movement with a safe timing
+        logger.info(f"Moving head to yaw={yaw:.2f}, pitch={pitch:.2f} with time={move_time}ms")
         yield perform_movement(session, frames, mode="linear", sync=True, force=True)
 
         # Allow time to stabilize
@@ -189,7 +194,7 @@ def perform_scanning_gesture(session):
 
 
 @inlineCallbacks
-def scan_position_and_capture(session, yaw, pitch, capture_callback):
+def scan_position_and_capture(session, yaw, pitch, capture_callback, **extra_context):
     """
     Move to a specific position, stabilize, and capture an image.
 
@@ -201,24 +206,46 @@ def scan_position_and_capture(session, yaw, pitch, capture_callback):
     :type pitch: float
     :param capture_callback: Function to call to capture image once positioned
     :type capture_callback: callable
+    :param extra_context: Additional context information like turn number and rotation
     :return: Object detection results if capture_callback is provided
     :rtype: dict or None
     """
     try:
-        # First, move the head to the target position
-        logger.info(f"Moving to position yaw={yaw:.2f}, pitch={pitch:.2f}")
+        # Determine head orientation based on yaw angle
+        if yaw < -0.2:
+            orientation = "left"
+        elif yaw > 0.2:
+            orientation = "right"
+        else:
+            orientation = "middle"
 
-        # Move with generous timing
-        yield move_head_to_position(session, yaw, pitch, move_time=2000)
+        # Create position identifier (turn_orientation)
+        turn = extra_context.get('turn', 0)
+        position_id = f"{turn}_{orientation}"
+
+        # Add orientation and position_id to extra_context
+        extra_context["orientation"] = orientation
+        extra_context["position_id"] = position_id
+
+        # First, move the head to the target position
+        logger.info(
+            f"Moving to position yaw={yaw:.2f}, pitch={pitch:.2f}, orientation={orientation}, position={position_id}")
+
+        # Move with generous timing - explicitly setting movement time
+        move_success = yield move_head_to_position(session, yaw, pitch, move_time=2000)
+
+        if not move_success:
+            logger.warning("Failed to move head to target position")
+            return None
 
         # Additional stabilization time for the camera
         yield sleep(STABILIZATION_DELAY)
 
         # Only capture and process if we have a callback function
         if capture_callback:
-            # Call the capture callback directly
+            # Call the capture callback directly with extra context
             try:
-                result = yield capture_callback(session, yaw, pitch)
+                result = yield capture_callback(session, yaw, pitch, **extra_context)
                 return result
             except Exception as e:
                 logger.error(f"Error in capture callback: {e}")
@@ -258,8 +285,8 @@ def scan_area(session, yaw_angles, pitch_angles, capture_callback, process_callb
         extra_context = {}
 
     try:
-        # Reset head position before starting
-        yield move_head_to_position(session, 0.0, 0.0)
+        # Reset head position before starting with explicit timing
+        yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
 
         # Scan through each position
         for i, yaw in enumerate(yaw_angles):
@@ -268,11 +295,11 @@ def scan_area(session, yaw_angles, pitch_angles, capture_callback, process_callb
             for j, pitch in enumerate(pitch_angles):
                 logger.info(f"  Scanning at pitch {j + 1}/{len(pitch_angles)}, pitch={pitch:.2f}")
 
-                # Move to position, stabilize, and capture
+                # Position key for storing results
                 position_key = f"yaw{yaw:.2f}_pitch{pitch:.2f}"
 
                 # Capture and process image at this position with extra context
-                objects = yield capture_callback(session, yaw, pitch, **extra_context)
+                objects = yield scan_position_and_capture(session, yaw, pitch, capture_callback, **extra_context)
 
                 # Store the results
                 scan_results[position_key] = {
@@ -293,8 +320,8 @@ def scan_area(session, yaw_angles, pitch_angles, capture_callback, process_callb
             # Longer pause between yaw positions
             yield sleep(0.5)
 
-        # Return to center position
-        yield move_head_to_position(session, 0.0, 0.0)
+        # Return to center position with explicit timing
+        yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
 
         return scan_results, all_objects
 
@@ -303,7 +330,7 @@ def scan_area(session, yaw_angles, pitch_angles, capture_callback, process_callb
 
         # Try to return to center position
         try:
-            yield move_head_to_position(session, 0.0, 0.0)
+            yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
         except:
             pass
 
@@ -374,15 +401,21 @@ def perform_360_scan(session, capture_callback, process_callback=None):
     for turn in range(turns):
         logger.info(f"Performing scan at rotation {cumulative_rotation} degrees (turn {turn + 1}/{turns})")
 
+        # Make sure the head is centered before scanning each section - with explicit timing
+        yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
+        yield sleep(0.5)  # Brief pause to stabilize
+
         # Scan current position with turn context
         extra_context = {
             "turn": turn,
             "cumulative_rotation": cumulative_rotation
         }
 
+        # Perform the scan at the current rotation position
+        logger.info(f"Scanning sector {turn + 1}/{turns}")
         scan_results, objects = yield scan_area(
             session,
-            DEFAULT_HEAD_YAW_RANGE,
+            DEFAULT_HEAD_YAW_RANGE,  # Use all defined yaw angles
             DEFAULT_HEAD_PITCH_RANGE,
             capture_callback,
             process_callback,
@@ -394,14 +427,27 @@ def perform_360_scan(session, capture_callback, process_callback=None):
         if objects and process_callback:
             all_detected_objects = process_callback(all_detected_objects, objects)
 
-        # Turn robot and update rotation tracking
-        yield turn_robot(session, "right")
-        cumulative_rotation = (cumulative_rotation + turn_angle) % 360
+        if turn < turns - 1:  # Don't turn after the last scan
+            # Reset head to center before turning the body - with explicit timing
+            logger.info("Centering head before body turn")
+            yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
+            yield sleep(0.5)  # Brief pause
+
+            # Turn robot and update rotation tracking
+            logger.info(f"Turning robot {turn_angle} degrees right (turn {turn + 1}/{turns})")
+            yield turn_robot(session, "right")
+            cumulative_rotation = (cumulative_rotation + turn_angle) % 360
+
+            # Give the robot time to stabilize after turning
+            yield sleep(1.0)
+
+    # Reset head position at the end of the scan - with explicit timing
+    logger.info("Resetting head position at the end of scan")
+    yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
 
     # Additional turn to return to start position
     logger.info("Turning robot to return to start position")
     yield turn_robot(session, "right")
-    cumulative_rotation = (cumulative_rotation + turn_angle) % 360
 
     logger.info("360-degree scan complete")
     return all_scan_results, all_detected_objects

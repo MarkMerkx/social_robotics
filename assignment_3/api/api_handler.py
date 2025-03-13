@@ -127,3 +127,92 @@ def generate_secret_word():
         logger.error("Error in generate_secret_word: %s", e)
         # Fallback to a random word from a hardcoded list.
         return "apple"
+
+
+def choose_object(objects: dict, difficulty: int):
+    """
+    Chooses an object based on difficulty and the recognized objects during the scanning routine.
+    Returns detailed information about the chosen object including features and Dutch translation.
+
+    :param objects: dict containing objects with their features, confidence and position data
+    :param difficulty: (1-3) difficulty level where 1 is easy, 3 is hard
+    :return: dict with detailed object information
+    """
+    try:
+        api_key = chat_gtp_connection()
+        client = OpenAI(api_key=api_key)
+
+        # Filter to keep only chatgpt objects since we want more detailed descriptions
+        chatgpt_objects = {k: v for k, v in objects.items() if v.get('source') == 'chatgpt'}
+
+        if not chatgpt_objects:
+            logger.warning("No ChatGPT-detected objects available for selection")
+            return None
+
+        # Prepare a structured prompt for better results
+        prompt = (
+            f"I need to choose an object for an 'I Spy' game based on difficulty level {difficulty} (1=easy, 3=hard). "
+            f"Here are the detected objects with their positions and confidence: {chatgpt_objects}\n\n"
+            f"Please select ONE appropriate object based on the following criteria:\n"
+            f"- For difficulty 1 (easy): Choose objects with simple, common names that children might know, with distinctive colors or shapes\n"
+            f"- For difficulty 2 (medium): Choose objects with moderate complexity or less distinctive features\n"
+            f"- For difficulty 3 (hard): Choose objects with complex names, less common objects, or objects with subtle features\n\n"
+            f"For the selected object, provide the following information in a structured JSON format:\n"
+            f"1. 'name': The English name of the object\n"
+            f"2. 'dutch_name': The Dutch translation of the object name\n"
+            f"3. 'confidence': The confidence score from the original detection\n"
+            f"4. 'position': The position identifier where the object was detected (e.g., '2_left')\n"
+            f"5. 'features': A dictionary containing:\n"
+            f"   - 'color': The primary color(s) of the object\n"
+            f"   - 'size': The approximate size description (small, medium, large)\n"
+            f"   - 'shape': The shape description of the object\n\n"
+            f"ONLY return the JSON object with this information, no additional text."
+        )
+
+        logger.debug("Built prompt for object selection: %s", prompt)
+
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="gpt-4o-mini",
+            max_tokens=300,
+            temperature=0.3  # Lower temperature for more consistent JSON responses
+        )
+
+        # Extract the response text
+        response_text = response.choices[0].message.content.strip()
+
+        try:
+            # Parse JSON response
+            import json
+            detailed_object = json.loads(response_text)
+            logger.debug("Selected object with details: %s", detailed_object)
+
+            # Add any missing fields from the original object data if possible
+            object_name = detailed_object.get('name')
+            for obj_id, obj_data in chatgpt_objects.items():
+                if obj_data.get('name').lower() == object_name.lower():
+                    # Copy original detection data that might be missing
+                    for key in ['yaw', 'pitch', 'turn', 'cumulative_rotation', 'orientation']:
+                        if key in obj_data and key not in detailed_object:
+                            detailed_object[key] = obj_data[key]
+                    break
+
+            return detailed_object
+        except json.JSONDecodeError:
+            # If parsing fails, try to extract JSON from text
+            import re
+            json_match = re.search(r'({.*})', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    detailed_object = json.loads(json_match.group(1))
+                    logger.debug("Extracted object from text: %s", detailed_object)
+                    return detailed_object
+                except:
+                    logger.error("Failed to parse extracted JSON")
+
+            logger.error("Failed to parse ChatGPT response as JSON: %s", response_text)
+            return None
+
+    except Exception as e:
+        logger.error("Error in choose_object: %s", e)
+        return None

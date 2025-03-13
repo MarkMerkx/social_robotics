@@ -11,16 +11,12 @@ import time
 import shutil
 from PIL import Image
 from twisted.internet.defer import inlineCallbacks
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # Constants
 SCAN_DIR = "scan_images"
-
-# Camera resolution settings - we attempt these but the robot may have fixed resolution
-CAMERA_WIDTH = 1280  # Request higher resolution
-CAMERA_HEIGHT = 720  # HD resolution
-CAMERA_QUALITY = 90  # Higher quality (0-100)
 
 
 def initialize_image_directory():
@@ -55,7 +51,7 @@ def capture_image(session, yaw=None, pitch=None):
     try:
         logger.info("Capturing image...")
 
-        # Just use default parameters - high resolution request didn't work
+        # Just use default parameters
         image_data = yield session.call("rom.sensor.sight.read", time=0.0)
 
         if not image_data:
@@ -78,12 +74,28 @@ def capture_image(session, yaw=None, pitch=None):
 
                     filename = f"{SCAN_DIR}/image{position_info}_{timestamp}.jpg"
 
-                    # Save the image
-                    with open(filename, "wb") as f:
-                        f.write(raw_bytes)
-
-                    # Convert to PIL Image
+                    # Convert to PIL Image first to check the actual resolution
                     image = Image.open(io.BytesIO(raw_bytes))
+
+                    # If image is smaller than 480x640, resize it to match YOLO's processing resolution
+                    if image.width < 480 or image.height < 640:
+                        logger.info(f"Original image resolution: {image.width}x{image.height}, resizing to 480x640")
+                        # Resize the image to 480x640 while maintaining aspect ratio
+                        image = resize_with_padding(image, (480, 640))
+
+                        # Convert the resized image back to bytes for saving
+                        buffer = io.BytesIO()
+                        image.save(buffer, format="JPEG")
+                        buffer.seek(0)
+                        resized_bytes = buffer.read()
+
+                        # Save the resized image
+                        with open(filename, "wb") as f:
+                            f.write(resized_bytes)
+                    else:
+                        # Save the original image
+                        with open(filename, "wb") as f:
+                            f.write(raw_bytes)
 
                     # Log resolution for debugging
                     logger.info(f"Image saved to {filename} (Resolution: {image.width}x{image.height})")
@@ -100,3 +112,44 @@ def capture_image(session, yaw=None, pitch=None):
     except Exception as e:
         logger.error(f"Error capturing image: {e}")
         return None
+
+
+def resize_with_padding(image, target_size):
+    """
+    Resize image to target size while maintaining aspect ratio and adding padding if necessary.
+
+    :param image: PIL image
+    :param target_size: (width, height) tuple
+    :return: Resized PIL image
+    """
+    target_width, target_height = target_size
+    width, height = image.size
+
+    # Calculate target ratio and image ratio
+    target_ratio = target_width / target_height
+    img_ratio = width / height
+
+    # Calculate new dimensions
+    if img_ratio > target_ratio:
+        # Image is wider than target
+        new_width = target_width
+        new_height = int(new_width / img_ratio)
+    else:
+        # Image is taller than target
+        new_height = target_height
+        new_width = int(new_height * img_ratio)
+
+    # Resize the image
+    resized_img = image.resize((new_width, new_height), Image.LANCZOS)
+
+    # Create a new image with the target size and paste the resized image
+    new_img = Image.new("RGB", (target_width, target_height), color=(0, 0, 0))
+
+    # Calculate position to paste (center)
+    paste_x = (target_width - new_width) // 2
+    paste_y = (target_height - new_height) // 2
+
+    # Paste the resized image onto the new image
+    new_img.paste(resized_img, (paste_x, paste_y))
+
+    return new_img
