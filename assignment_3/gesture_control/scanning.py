@@ -338,7 +338,7 @@ def scan_area(session, yaw_angles, pitch_angles, capture_callback, process_callb
 
 
 @inlineCallbacks
-def perform_static_scan(session, capture_callback, process_callback=None):
+def perform_static_scan(session, capture_callback, process_callback=None, extra_context=None):
     """
     Perform a static scan using only head movements.
 
@@ -348,6 +348,8 @@ def perform_static_scan(session, capture_callback, process_callback=None):
     :type capture_callback: callable
     :param process_callback: Function to call to process results
     :type process_callback: callable
+    :param extra_context: Additional context to pass to capture_callback
+    :type extra_context: dict
     :return: Dictionary of scan results and all detected objects
     :rtype: tuple(dict, dict)
     """
@@ -360,13 +362,14 @@ def perform_static_scan(session, capture_callback, process_callback=None):
     # Initial scanning gesture to indicate start
     yield perform_scanning_gesture(session)
 
-    # Perform the scan
+    # Perform the scan with extra_context
     scan_results, all_objects = yield scan_area(
         session,
         yaw_angles,
         pitch_angles,
         capture_callback,
-        process_callback
+        process_callback,
+        extra_context=extra_context
     )
 
     logger.info(f"Static scan complete. Scanned {len(scan_results)} positions.")
@@ -374,7 +377,7 @@ def perform_static_scan(session, capture_callback, process_callback=None):
 
 
 @inlineCallbacks
-def perform_360_scan(session, capture_callback, process_callback=None):
+def perform_360_scan(session, capture_callback, process_callback=None, extra_context=None):
     """
     Perform a 360-degree scan by rotating the robot and scanning at each position.
 
@@ -384,6 +387,8 @@ def perform_360_scan(session, capture_callback, process_callback=None):
     :type capture_callback: callable
     :param process_callback: Function to call to process results
     :type process_callback: callable
+    :param extra_context: Additional context to pass to capture_callback
+    :type extra_context: dict
     :return: Dictionary of scan results and all detected objects
     :rtype: tuple(dict, dict)
     """
@@ -398,6 +403,10 @@ def perform_360_scan(session, capture_callback, process_callback=None):
     all_scan_results = {}
     all_detected_objects = {}
 
+    # Initialize extra_context if it's None
+    if extra_context is None:
+        extra_context = {}
+
     for turn in range(turns):
         logger.info(f"Performing scan at rotation {cumulative_rotation} degrees (turn {turn + 1}/{turns})")
 
@@ -405,11 +414,12 @@ def perform_360_scan(session, capture_callback, process_callback=None):
         yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
         yield sleep(0.5)  # Brief pause to stabilize
 
-        # Scan current position with turn context
-        extra_context = {
+        # Merge base extra_context with turn-specific context
+        turn_context = extra_context.copy()
+        turn_context.update({
             "turn": turn,
             "cumulative_rotation": cumulative_rotation
-        }
+        })
 
         # Perform the scan at the current rotation position
         logger.info(f"Scanning sector {turn + 1}/{turns}")
@@ -419,7 +429,7 @@ def perform_360_scan(session, capture_callback, process_callback=None):
             DEFAULT_HEAD_PITCH_RANGE,
             capture_callback,
             process_callback,
-            extra_context=extra_context
+            extra_context=turn_context
         )
 
         # Merge the results
@@ -454,7 +464,7 @@ def perform_360_scan(session, capture_callback, process_callback=None):
 
 
 @inlineCallbacks
-def perform_scan(session, mode=MODE_STATIC, capture_callback=None, process_callback=None):
+def perform_scan(session, mode=MODE_STATIC, capture_callback=None, process_callback=None, extra_context=None):
     """
     Perform a scan using the specified mode.
 
@@ -466,13 +476,16 @@ def perform_scan(session, mode=MODE_STATIC, capture_callback=None, process_callb
     :type capture_callback: callable
     :param process_callback: Function to call to process results
     :type process_callback: callable
+    :param extra_context: Additional context to pass to capture_callback
+    :type extra_context: dict
     :return: Dictionary of scan results and all detected objects
     :rtype: tuple(dict, dict)
     """
+    # Pass along extra_context to the appropriate scan function
     if mode == MODE_360:
-        return (yield perform_360_scan(session, capture_callback, process_callback))
+        return (yield perform_360_scan(session, capture_callback, process_callback, extra_context=extra_context))
     else:
-        return (yield perform_static_scan(session, capture_callback, process_callback))
+        return (yield perform_static_scan(session, capture_callback, process_callback, extra_context=extra_context))
 
 
 @inlineCallbacks

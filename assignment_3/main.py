@@ -52,6 +52,32 @@ Features
 18. * Play custom sounds - if it concerns an animal, what sound does it make?
 19. Generally improve the flow
 
+
+TODO:
+1. Face tracking - when the robot is not scanning 
+4. Integrate it both ways (child guesses/robot guesses)
+5. Multi language (dutch/english, dialogue in english, guessed word in dutch)
+8. Introduction/get childs name
+9. Correct childs speech if confidence of STT > x
+10. Additional reasoning steps
+ -- Repetition of guesses/words
+ -- Reprompting after silence
+11. Additional gestures when the robot is thinking (think iconic gesture)
+12.* Sentiment analysis of childs emotion -> confused or disinterested - try to grab attention - measure attention span
+13. Give hints (shape, size, usage)
+14. Give a fun fact after guessing it or an additional dutch word that relates to it, or synonyms
+15. Change STT to accept both dutch and english answers, determine which has been returned.
+16. Contextual words - based on usage or something
+17. Positive reinforcement
+18. * Play custom sounds - if it concerns an animal, what sound does it make?
+19. Generally improve the flow
+
+FIXME:
+3. Point to a "to be guessed object"
+7. Dynamic difficulty
+ -- If guessed within < rounds/turns
+ -- Give different starting hint
+ -- increase word complexity
 """
 
 

@@ -1,0 +1,15 @@
+{
+  "name": "computer monitor",
+  "dutch_name": "computer monitor",
+  "features": {
+    "color": "unknown",
+    "size": "unknown",
+    "shape": "unknown"
+  },
+  "position_id": "0_left",
+  "orientation": "",
+  "turn": 0,
+  "yaw": 0,
+  "pitch": 0,
+  "cumulative_rotation": 0
+}

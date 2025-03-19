@@ -11,7 +11,7 @@ from autobahn.twisted.util import sleep
 import logging
 import os
 import argparse
-
+import json
 # Import modules
 from vision.image_capture import initialize_image_directory, capture_image
 from vision.object_recognition import initialize_object_directory, detect_objects, get_unique_objects, save_detection_results
@@ -81,8 +81,16 @@ def capture_and_analyze(session, yaw, pitch, **kwargs):
         # For I Spy game, we primarily want to use ChatGPT Vision for better feature detection
         use_chatgpt = True
 
+        # Disable YOLO if requested
+        use_yolo = kwargs.get('use_yolo', False)  # Default to False for I Spy game
+
         # Detect objects in the image with position info
-        objects, annotated_path = detect_objects(image, position_info=position_info, use_chatgpt=use_chatgpt)
+        objects, annotated_path = detect_objects(
+            image,
+            position_info=position_info,
+            use_chatgpt=use_chatgpt,
+            use_yolo=use_yolo
+        )
 
         return objects
 
@@ -176,7 +184,7 @@ def test_single_image(session, use_chatgpt=True):
 
 
 @inlineCallbacks
-def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty=1):
+def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty=1, use_yolo=False):
     """
     Run a complete scan test with the specified mode and select an object for the I Spy game.
 
@@ -188,21 +196,36 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty
     :type point_enabled: bool
     :param difficulty: Difficulty level for object selection (1-3)
     :type difficulty: int
+    :param use_yolo: Whether to use YOLO for object detection
+    :type use_yolo: bool
     :return: Dictionary with scan results and selected object
     :rtype: dict
     """
     mode_name = "360-degree" if scan_mode == MODE_360 else "static"
     logger.info(f"Starting {mode_name} scan test")
 
+    # Log detection method configuration
+    detection_methods = []
+    if use_yolo:
+        detection_methods.append("YOLO")
+    detection_methods.append("ChatGPT Vision")
+    logger.info(f"Using detection methods: {', '.join(detection_methods)}")
+
     # Announce start of scan
     yield session.call("rie.dialogue.say", text=f"Starting {mode_name} environment scan")
+
+    # Create extra parameters to pass to capture_and_analyze
+    extra_params = {
+        "use_yolo": use_yolo
+    }
 
     # Perform the scan using the capture_and_analyze function
     scan_results, all_objects = yield perform_scan(
         session,
         mode=scan_mode,
         capture_callback=capture_and_analyze,
-        process_callback=process_detected_objects
+        process_callback=process_detected_objects,
+        extra_context=extra_params
     )
 
     # Get unique objects for reporting
@@ -270,25 +293,24 @@ def main(session, details):
     """Main entry point when the WAMP session is established."""
     logger.info("WAMP session established")
 
-    # Get the scan mode from command line arguments
+    # Get parameters from command line arguments
     scan_mode = MODE_360 if args.mode == '360' else MODE_STATIC
-
-    # Get difficulty level
     difficulty = args.difficulty
+    use_yolo = args.use_yolo
 
     # Wait for a moment to ensure everything is initialized
     yield sleep(2)
 
-    # Test a single image capture first
-    yield test_single_image(session)
+    # Test a single image capture first, using the same detection settings
+    yield test_single_image(session, use_chatgpt=True)  # Always use ChatGPT for test
 
-    # Run the full scan test with pointing enabled/disabled based on command line argument
-    # and include the difficulty parameter for object selection
+    # Run the full scan test with specified parameters
     scan_results = yield run_scan_test(
         session,
         scan_mode=scan_mode,
         point_enabled=not args.no_point,
-        difficulty=difficulty
+        difficulty=difficulty,
+        use_yolo=use_yolo
     )
 
     # Report final results
@@ -317,6 +339,8 @@ if __name__ == "__main__":
                         help='Scan mode: static (head movement only) or 360 (full rotation)')
     parser.add_argument('--difficulty', type=int, choices=[1, 2, 3], default=1,
                         help='Difficulty level for the I Spy game (1=easy, 2=medium, 3=hard)')
+    parser.add_argument('--use-yolo', action='store_true', default=False,
+                        help='Enable YOLO object detection (disabled by default for I Spy game)')
     args = parser.parse_args()
 
     # Configure WAMP component
@@ -326,7 +350,7 @@ if __name__ == "__main__":
             "serializers": ["msgpack"],
             "max_retries": 0
         }],
-        realm="rie.67d2ae3c99b259cf43b05300",
+        realm="rie.67daa31e540602623a34bf03",
     )
 
     # Register the main function
@@ -334,3 +358,5 @@ if __name__ == "__main__":
 
     # Run the component
     run([wamp])
+
+

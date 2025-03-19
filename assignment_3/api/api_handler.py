@@ -161,7 +161,7 @@ def choose_object(objects: dict, difficulty: int):
             f"1. 'name': The English name of the object\n"
             f"2. 'dutch_name': The Dutch translation of the object name\n"
             f"3. 'confidence': The confidence score from the original detection\n"
-            f"4. 'position': The position identifier where the object was detected (e.g., '2_left')\n"
+            f"4. 'position_id': The position identifier where the object was detected (e.g., '2_left')\n"
             f"5. 'features': A dictionary containing:\n"
             f"   - 'color': The primary color(s) of the object\n"
             f"   - 'size': The approximate size description (small, medium, large)\n"
@@ -192,10 +192,19 @@ def choose_object(objects: dict, difficulty: int):
             for obj_id, obj_data in chatgpt_objects.items():
                 if obj_data.get('name').lower() == object_name.lower():
                     # Copy original detection data that might be missing
-                    for key in ['yaw', 'pitch', 'turn', 'cumulative_rotation', 'orientation']:
+                    for key in ['yaw', 'pitch', 'turn', 'cumulative_rotation', 'orientation', 'position_id']:
                         if key in obj_data and key not in detailed_object:
                             detailed_object[key] = obj_data[key]
+
+                    # Handle the case where ChatGPT returned 'position' instead of 'position_id'
+                    if 'position' in detailed_object and 'position_id' not in detailed_object:
+                        detailed_object['position_id'] = detailed_object.pop('position')
+
                     break
+
+            # Final check to ensure we have position_id
+            if 'position' in detailed_object and 'position_id' not in detailed_object:
+                detailed_object['position_id'] = detailed_object.pop('position')
 
             return detailed_object
         except json.JSONDecodeError:
@@ -216,3 +225,6 @@ def choose_object(objects: dict, difficulty: int):
     except Exception as e:
         logger.error("Error in choose_object: %s", e)
         return None
+
+
+def give_hint(difficulty, round_n, previous_hints):

@@ -116,49 +116,59 @@ def detect_objects_yolo(image, position_info=None):
         return {}
 
 
-def detect_objects(image, position_info=None, use_chatgpt=USE_CHATGPT_VISION):
+def detect_objects(image, position_info=None, use_chatgpt=USE_CHATGPT_VISION, use_yolo=False):
     """
     Detect objects in an image using multiple detection methods.
 
     :param image: The image to analyze
     :type image: PIL.Image
-    :param position_info: Information about where the image was captured (yaw, pitch)
+    :param position_info: Information about where the image was captured (yaw, pitch, position_id, etc.)
     :type position_info: dict or None
     :param use_chatgpt: Whether to use ChatGPT Vision API
     :type use_chatgpt: bool
+    :param use_yolo: Whether to use YOLO for object detection
+    :type use_yolo: bool
     :return: Dictionary of detected objects and path to annotated image
     :rtype: tuple(dict, str)
     """
     detected_objects = {}
     timestamp = int(time.time())
 
-    # First, use YOLO for object detection
-    yolo_objects = detect_objects_yolo(image, position_info)
-    detected_objects.update(yolo_objects)
+    # Use YOLO for object detection if enabled
+    if use_yolo:
+        yolo_objects = detect_objects_yolo(image, position_info)
+        detected_objects.update(yolo_objects)
+        logger.info(f"YOLO detection completed with {len(yolo_objects)} objects")
+    else:
+        logger.info("YOLO detection disabled")
 
     # If enabled and available, use ChatGPT Vision API for additional analysis
     if use_chatgpt:
         try:
-            logger.info("Using ChatGPT Vision API for additional object detection")
-            gpt_objects = get_chatgpt_vision_objects(image)
+            logger.info("Using ChatGPT Vision API for object detection")
+            gpt_objects = get_chatgpt_vision_objects(image, position_info)
 
             # Add position information to GPT objects if available
             if position_info:
                 for obj_id, obj_data in gpt_objects.items():
-                    obj_data['position'] = position_info
+                    # Copy all position information
+                    for key, value in position_info.items():
+                        if key not in obj_data:
+                            obj_data[key] = value
 
             # Merge with existing detections
             detected_objects.update(gpt_objects)
+            logger.info(f"ChatGPT Vision detection completed with {len(gpt_objects)} objects")
         except Exception as e:
             logger.error(f"Error in ChatGPT Vision object detection: {e}")
 
     # Create annotated image from the detections
-    annotated_img, annotated_filename = create_annotated_image(image, detected_objects, timestamp)
+    annotated_img, annotated_filename = create_annotated_image(image, detected_objects, timestamp, position_info)
 
     return detected_objects, annotated_filename
 
 
-def create_annotated_image(image, detected_objects, timestamp):
+def create_annotated_image(image, detected_objects, timestamp, position_info=None):
     """
     Create an annotated image with bounding boxes for detected objects.
 
@@ -168,6 +178,8 @@ def create_annotated_image(image, detected_objects, timestamp):
     :type detected_objects: dict
     :param timestamp: Timestamp for filename
     :type timestamp: int
+    :param position_info: Information about where the image was captured
+    :type position_info: dict or None
     :return: Annotated image and filename
     :rtype: tuple(PIL.Image, str)
     """
@@ -212,9 +224,24 @@ def create_annotated_image(image, detected_objects, timestamp):
             label = f"{name}: {confidence:.2f} ({source})"
             draw.text((10, y_pos), label, fill="blue", font=font)
 
-    # Create filename with detected objects (first 3)
+    # Get position identifier if available
+    position_id = ""
+    if position_info:
+        # Check for position_id directly
+        if 'position_id' in position_info:
+            position_id = position_info['position_id']
+        # Alternatively construct from orientation and turn
+        elif 'orientation' in position_info and 'turn' in position_info:
+            position_id = f"{position_info['turn']}_{position_info['orientation']}"
+
+    # Create filename with position and detected objects (first 3)
     object_names = "_".join(detected_names[:3]) if detected_names else "none"
-    annotated_filename = f"scan_images/annotated_{object_names}_{timestamp}.jpg"
+
+    # Include position_id in filename if available
+    if position_id:
+        annotated_filename = f"scan_images/pos_{position_id}_{object_names}_{timestamp}.jpg"
+    else:
+        annotated_filename = f"scan_images/annotated_{object_names}_{timestamp}.jpg"
 
     # Save annotated image
     os.makedirs("scan_images", exist_ok=True)

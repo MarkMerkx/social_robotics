@@ -1,20 +1,62 @@
 {
-  "gpt_monitor_0": {
-    "name": "monitor",
+  "gpt_computer monitor_0": {
+    "name": "computer monitor",
     "confidence": 0.9,
     "source": "chatgpt",
-    "description": "A monitor is visible, likely used for computer display."
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
   },
-  "gpt_desk_1": {
-    "name": "desk",
+  "gpt_laptop_1": {
+    "name": "laptop",
     "confidence": 0.85,
     "source": "chatgpt",
-    "description": "A wooden desk is present, serving as a workspace."
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
   },
-  "gpt_cables_2": {
-    "name": "cables",
-    "confidence": 0.75,
+  "gpt_people_2": {
+    "name": "people",
+    "confidence": 0.8,
     "source": "chatgpt",
-    "description": "Various cables are seen, likely for connection between devices."
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
+  },
+  "gpt_table_3": {
+    "name": "table",
+    "confidence": 0.95,
+    "source": "chatgpt",
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
+  },
+  "gpt_window_4": {
+    "name": "window",
+    "confidence": 0.7,
+    "source": "chatgpt",
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
+  },
+  "gpt_office chairs_5": {
+    "name": "office chairs",
+    "confidence": 0.8,
+    "source": "chatgpt",
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
   }
 }

@@ -137,18 +137,21 @@ def analyze_image_with_chatgpt_vision(image, prompt=None):
         logger.error(f"Error in OpenAI API call: {str(e)}")
         return {"error": str(e)}
 
-def get_chatgpt_vision_objects(image):
+
+def get_chatgpt_vision_objects(image, position_info=None):
     """
-    Get object detections using ChatGPT Vision API.
+    Get enhanced object detections using ChatGPT Vision API for the I Spy game.
 
     :param image: Image to analyze
     :type image: PIL.Image
-    :return: Dictionary of detected objects
+    :param position_info: Information about where the image was captured
+    :type position_info: dict or None
+    :return: Dictionary of detected objects with enhanced features
     :rtype: dict
     """
     timestamp = int(time.time())
 
-    # Call the API
+    # Call the API with enhanced feature detection
     analysis_result = analyze_image_with_chatgpt_vision(image)
 
     # Process the result into the expected format
@@ -158,13 +161,24 @@ def get_chatgpt_vision_objects(image):
         for i, obj in enumerate(analysis_result["objects"]):
             object_id = f"gpt_{obj['name']}_{i}"
 
-            # Create object entry
+            # Create object entry with enhanced features
             detected_objects[object_id] = {
                 'name': obj['name'],
-                'confidence': obj.get('confidence', 0.9),  # Default confidence if not provided
+                'confidence': obj.get('confidence', 0.9),
                 'source': 'chatgpt',
-                'description': obj.get('description', ''),
+                'features': obj.get('features', {
+                    'color': 'unknown',
+                    'size': 'unknown',
+                    'shape': 'unknown'
+                }),
             }
+
+            # Add position information if available
+            if position_info:
+                # Copy all position data
+                for key, value in position_info.items():
+                    detected_objects[object_id][key] = value
+
     elif "raw_response" in analysis_result:
         # Store raw response as a single object if JSON parsing failed
         object_id = f"gpt_analysis_{timestamp}"
@@ -174,10 +188,16 @@ def get_chatgpt_vision_objects(image):
             'source': 'chatgpt',
             'raw_text': analysis_result["raw_response"],
         }
+
+        # Still add position information
+        if position_info:
+            for key, value in position_info.items():
+                detected_objects[object_id][key] = value
+
     elif "error" in analysis_result:
         # Log the error but return empty results to not break the flow
         logger.error(f"ChatGPT Vision API error: {analysis_result['error']}")
         return {}
 
-    logger.info(f"ChatGPT Vision API detected {len(detected_objects)} objects")
+    logger.info(f"ChatGPT Vision API detected {len(detected_objects)} objects with enhanced features")
     return detected_objects
