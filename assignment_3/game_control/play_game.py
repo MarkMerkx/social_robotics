@@ -1,10 +1,11 @@
 # /game_control/play_game.py
 import logging
+
 from twisted.internet.defer import inlineCallbacks
-from .robot_guesses import play_game_robot_guesses
-from .user_guesses import play_game_user_guesses
-from .game_utils import wait_for_response
-from assignment_2.gesture_control.say_animated import say_animated
+
+from assignment_3.game_control.game_utils import wait_for_response
+# We import the i-spy style user_guesses function (repurposed below)
+from assignment_3.game_control.user_guesses import play_game_user_guesses
 
 logging.basicConfig(
     format='%(asctime)s GAME HANDLER %(levelname)-8s %(message)s',
@@ -15,43 +16,34 @@ logger = logging.getLogger(__name__)
 @inlineCallbacks
 def play_game(session, stt):
     """
-    Main game entry point.
-    Ask if the user wants to play, choose the mode, and after the game ends ask if the user wants to play again.
-    If the user declines, the session is left.
+    Main entry point for the game:
+      - Asks user if they want to play
+      - If yes, calls 'play_game_user_guesses' (our new I Spy flow)
+      - If no, ends
     """
     playing = True
     while playing:
-        logger.debug("Starting new game...")
-        # Invite the user to play.
-        user_response = yield wait_for_response("Do you want to play a game? Please say Yes or No.", session, stt)
-        logger.debug("User response to invitation: %s", user_response)
+        # 1. Ask user if they want to play
+        user_response = yield wait_for_response(
+            "Do you want to play a game? Please say Yes or No.",
+            session, stt
+        )
+        logger.debug(f"User response to invitation: {user_response}")
         if not user_response or "no" in user_response.lower():
             yield session.call("rie.dialogue.say", text="Okay, maybe next time!")
             logger.debug("User declined to play.")
             playing = False
             break
 
-        # Ask which mode they want.
-        yield say_animated(session,
-                           "Great! Would you like me to guess your word, or would you like to guess my word? "
-                                "Please say 'I guess' if you want to guess my word, or 'You guess' if you want me to guess yours.", gesture_name="beat_gesture")
-        mode_response = yield wait_for_response("Please choose the game mode.", session, stt, timeout=20)
-        logger.debug("Mode selection response: %s", mode_response)
+        # 2. Actually play the new i-spy flow
+        logger.debug("Starting new I Spy game (user guesses).")
+        yield play_game_user_guesses(session, stt)
 
-        if mode_response and "i guess" in mode_response.lower():
-            mode = "user_guesses"
-        elif mode_response and "you guess" in mode_response.lower():
-            mode = "robot_guesses"
-        else:
-            mode = "robot_guesses"
-
-        if mode == "robot_guesses":
-            yield play_game_robot_guesses(session, stt)
-        else:
-            yield play_game_user_guesses(session, stt)
-
-        # After the game ends, ask if the user wants to play again.
-        again = yield wait_for_response("Do you want to play another game? Please say Yes or No.", session, stt)
+        # 3. After game ends, ask if user wants to play again
+        again = yield wait_for_response(
+            "Do you want to play again? Please say Yes or No.",
+            session, stt
+        )
         if again and "yes" in again.lower():
             playing = True
         else:

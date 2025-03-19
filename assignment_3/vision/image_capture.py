@@ -7,6 +7,7 @@ Provides functionality to capture images from the robot's camera and save them.
 import logging
 import os
 import io
+from autobahn.twisted.util import sleep
 import time
 import shutil
 from PIL import Image
@@ -50,9 +51,13 @@ def capture_image(session, yaw=None, pitch=None):
     """
     try:
         logger.info("Capturing image...")
+        # Flush older frames
+        for _ in range(2):  # read 2 times
+            _ = yield session.call("rom.sensor.sight.read", time=0)
+            yield sleep(0.3)  # short delay between flush calls
 
-        # Just use default parameters
-        image_data = yield session.call("rom.sensor.sight.read", time=0.0)
+        image_data = yield session.call("rom.sensor.sight.read", time=0.5)
+        yield sleep(0.3)  # short extra wait, just in case
 
         if not image_data:
             logger.warning("No image data received")

@@ -3,13 +3,13 @@ import logging
 
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from assignment_2.gesture_control.say_animated import say_animated
+from assignment_3.gesture_control.say_animated import say_animated
 
 logger = logging.getLogger(__name__)
 
 
 @inlineCallbacks
-def wait_for_response(prompt_text, session, stt, timeout=15):
+def wait_for_response(prompt_text, session, stt, timeout=3):
     """
     Waits for an STT response from the user.
     If prompt_text is provided, the robot will speak it; if None, no dialogue is spoken.
@@ -52,4 +52,7 @@ def wait_for_response(prompt_text, session, stt, timeout=15):
             logger.debug("Waiting for STT response... (%.1f/%d sec)", waited, timeout)
     if not response:
         logger.debug("Timeout reached with no response.")
+        response = "yes"
     return response
+
+

@@ -1,85 +1,68 @@
-# main.py
+"""
+TODO:
+1. Face tracking - when the robot is not scanning
+4. Integrate it both ways (child guesses/robot guesses)
+5. Multi language (dutch/english, dialogue in english, guessed word in dutch)
+8. Introduction/get child's name
+9. Correct child's speech if confidence of STT > x
+10. Additional reasoning steps (e.g., repetition of guesses, reprompting after silence)
+11. Additional gestures when the robot is thinking
+12.* Sentiment analysis to detect confusion or disinterest, measure attention span
+13. Give hints (shape, size, usage)
+14. Give a fun fact or synonyms after guessing
+15. Change STT to accept both dutch and english answers
+17. Positive reinforcement
+18.* Play custom sounds (e.g., if it concerns an animal)
+19. Generally improve the flow
+
+FIXME:
+3. Point to a "to be guessed object" (enhance torso rotation / alignment)
+7. Dynamic difficulty (if guessed within fewer rounds, give easier or harder next object)
+"""
+
+import logging
+import os
 from autobahn.twisted.component import Component, run
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
 from twisted.internet.task import LoopingCall
-from assignment_2.game_control.play_game import play_game
+
+# Vision and logging setup
+from assignment_3.utils.helpers import setup_logging
+from assignment_3.vision.image_capture import initialize_image_directory
+from assignment_3.vision.object_recognition import initialize_object_directory
+
+# Our game
+from assignment_3.game_control.play_game import play_game
+
+# Speech recognition
 from alpha_mini_rug.speech_to_text import SpeechToText
-import logging
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+setup_logging()
 logger = logging.getLogger(__name__)
 
-# Initialize a single SpeechToText instance
+# Ensure directories exist
+os.makedirs("vision", exist_ok=True)
+os.makedirs("gesture_control", exist_ok=True)
+os.makedirs("utils", exist_ok=True)
+
+# Create __init__.py if missing, so imports work
+for directory in ["vision", "gesture_control", "utils"]:
+    init_file = os.path.join(directory, "__init__.py")
+    if not os.path.exists(init_file):
+        with open(init_file, "w") as f:
+            pass
+
+# Initialize image directories for scanning
+initialize_image_directory()
+initialize_object_directory()
+
+# Initialize a single SpeechToText instance (adjust thresholds to your preference)
 stt = SpeechToText()
 stt.silence_time = 1.0
 stt.silence_threshold2 = 200
 stt.logging = False
-
-"""
-TODO:
-
-Implement a multi language (NL-EN) "I spy game" - only give the colour of the object/thing at first
-Dialogue will remain in English - the words will be guessed in dutch.
-
-Features
-1. Face tracking - when the robot is not scanning 
-2. Robot vision (object recognition) using either the chatGTP api vision or yolov11
- -- Determine certain FOV (make multiple images +/- 45 degrees)
- -- Scan all objects 
- ** Optionally make the robot turn around or do a full 360
-3. Point to a "to be guessed object"
-4. Integrate it both ways (child guesses/robot guesses)
-5. Multi language (dutch/english, dialogue in english, guessed word in dutch)
-6. Looking around/scanning gesture
-7. Dynamic difficulty
- -- If guessed within < rounds/turns
- -- Give different starting hint
- -- increase word complexity
-8. Introduction/get childs name
-9. Correct childs speech if confidence of STT > x
-10. Additional reasoning steps
- -- Repetition of guesses/words
- -- Reprompting after silence
-11. Additional gestures when the robot is thinking (think iconic gesture)
-12.* Sentiment analysis of childs emotion -> confused or disinterested - try to grab attention - measure attention span
-13. Give hints (shape, size, usage)
-14. Give a fun fact after guessing it or an additional dutch word that relates to it, or synonyms
-15. Change STT to accept both dutch and english answers, determine which has been returned.
-16. Contextual words - based on usage or something
-17. Positive reinforcement
-18. * Play custom sounds - if it concerns an animal, what sound does it make?
-19. Generally improve the flow
-
-
-TODO:
-1. Face tracking - when the robot is not scanning 
-4. Integrate it both ways (child guesses/robot guesses)
-5. Multi language (dutch/english, dialogue in english, guessed word in dutch)
-8. Introduction/get childs name
-9. Correct childs speech if confidence of STT > x
-10. Additional reasoning steps
- -- Repetition of guesses/words
- -- Reprompting after silence
-11. Additional gestures when the robot is thinking (think iconic gesture)
-12.* Sentiment analysis of childs emotion -> confused or disinterested - try to grab attention - measure attention span
-13. Give hints (shape, size, usage)
-14. Give a fun fact after guessing it or an additional dutch word that relates to it, or synonyms
-15. Change STT to accept both dutch and english answers, determine which has been returned.
-16. Contextual words - based on usage or something
-17. Positive reinforcement
-18. * Play custom sounds - if it concerns an animal, what sound does it make?
-19. Generally improve the flow
-
-FIXME:
-3. Point to a "to be guessed object"
-7. Dynamic difficulty
- -- If guessed within < rounds/turns
- -- Give different starting hint
- -- increase word complexity
-"""
-
 
 def process_audio():
     """
@@ -94,43 +77,43 @@ def main(session, details):
     """
     Main function called when the WAMP session is joined.
     Configures the microphone, subscribes to and starts the audio stream,
-    launches a concurrent audio processing loop, and starts the guessing game.
+    launches a concurrent audio processing loop, and starts the 'play_game' logic.
     """
-    # Optional behavior: play an initial animation.
+    # Optional "Crouch" or other initial behavior
     yield session.call("rom.optional.behavior.play", name="BlocklyCrouch")
     yield session.call("rie.dialogue.say", text="Initializing the game...")
     yield sleep(2)
 
-    # Configure the microphone sensitivity and language.
+    # Configure microphone and language
     yield session.call("rom.sensor.hearing.sensitivity", 1650)
     yield session.call("rie.dialogue.config.language", lang="en")
 
-    # Subscribe to the microphone stream for continuous STT updates.
+    # Subscribe to the microphone stream for continuous STT
     yield session.subscribe(stt.listen_continues, "rom.sensor.hearing.stream")
 
-    # Start the microphone stream.
+    # Start mic stream
     yield session.call("rom.sensor.hearing.stream")
     logger.debug("Audio stream started.")
 
-    # Launch the audio processing loop concurrently.
+    # Audio processing loop
     audio_loop = LoopingCall(process_audio)
-    audio_loop.start(0.5)  # Process audio every 0.5 seconds.
+    audio_loop.start(0.5)  # process audio every 0.5 seconds
 
-    # Start the guessing game, passing the shared STT instance.
+    # Start the main "play_game" flow (which now does the I Spy user guess approach)
     yield play_game(session, stt)
 
-    # Keep the session alive.
+    # Keep the session alive
     while True:
         yield sleep(1)
 
-# Configure the WAMP component.
+# Configure WAMP
 wamp = Component(
     transports=[{
         "url": "ws://wamp.robotsindeklas.nl",
         "serializers": ["msgpack"],
         "max_retries": 0
     }],
-    realm="rie.67d2ae3c99b259cf43b05300",
+    realm="rie.67daa31e540602623a34bf03",
 )
 
 wamp.on_join(main)

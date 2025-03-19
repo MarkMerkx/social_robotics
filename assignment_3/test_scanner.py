@@ -12,16 +12,24 @@ import logging
 import os
 import argparse
 import json
+from gesture_control.point_to_object import point_to_object
 # Import modules
 from vision.image_capture import initialize_image_directory, capture_image
 from vision.object_recognition import initialize_object_directory, detect_objects, get_unique_objects, save_detection_results
 from gesture_control.scanning import (
     perform_scan,
-    point_to_object,
     MODE_STATIC,
     MODE_360
 )
 from utils.helpers import setup_logging, format_object_list, process_detected_objects
+
+# Import hint generation functions
+from assignment_3.api.api_handler import (
+    choose_object,
+    give_hint,
+    start_i_spy_game,
+    process_guess
+)
 
 # Create directories for modules if they don't exist
 os.makedirs("vision", exist_ok=True)
@@ -100,87 +108,61 @@ def capture_and_analyze(session, yaw, pitch, **kwargs):
 
 
 @inlineCallbacks
-def test_single_image(session, use_chatgpt=True):
+def demo_hints(session, game_object, difficulty, num_rounds=3):
     """
-    Test capturing and analyzing a single image.
+    Demonstrate hint generation for the I Spy game.
 
     :param session: The WAMP session
     :type session: Component
-    :param use_chatgpt: Whether to use ChatGPT Vision API for enhanced detection
-    :type use_chatgpt: bool
-    :return: Success flag
-    :rtype: bool
+    :param game_object: The selected game object
+    :type game_object: dict
+    :param difficulty: Difficulty level (1-3)
+    :type difficulty: int
+    :param num_rounds: Number of additional hints to demonstrate
+    :type num_rounds: int
+    :return: List of all hints generated
+    :rtype: list
     """
-    logger.info("Testing single image capture and analysis")
+    try:
+        # Start the game with an initial introduction and hint
+        intro, initial_hint = start_i_spy_game(game_object, difficulty)
 
-    # Whether ChatGPT Vision API should be used
-    chatgpt_status = "enabled" if use_chatgpt else "disabled"
-    logger.info(f"ChatGPT Vision API is {chatgpt_status} for this test")
+        logger.info(f"I Spy game introduction: {intro}")
+        logger.info(f"Initial hint: {initial_hint}")
 
-    # Capture image
-    result = yield capture_image(session)
-    if result:
-        image, filename = result
-        logger.info(f"Captured test image: {filename}")
+        # Have the robot say the introduction and initial hint
+        yield session.call("rie.dialogue.say", text=intro)
+        yield sleep(0.5)  # Brief pause between sentences
+        yield session.call("rie.dialogue.say", text=initial_hint)
 
-        # Detect objects with optional ChatGPT Vision API
-        objects, annotated_path = detect_objects(image, use_chatgpt=use_chatgpt)
+        # Track all hints provided
+        all_hints = [initial_hint]
 
-        if objects:
-            logger.info(f"Detected {len(objects)} objects in test image")
+        # Generate and demonstrate additional hints
+        for round_num in range(num_rounds):
+            # Add a delay to simulate game progression
+            yield sleep(1.0)
 
-            # Group objects by source for better reporting
-            yolo_objects = [obj for obj_id, obj in objects.items()
-                            if obj.get('source', '') == 'yolo']
+            # Generate the next hint
+            next_hint = give_hint(
+                game_object,
+                difficulty=difficulty,
+                round_num=round_num+1,  # First additional hint is round 1
+                previous_hints=all_hints,
+                is_initial_hint=False
+            )
 
-            gpt_objects = [obj for obj_id, obj in objects.items()
-                           if obj.get('source', '') == 'chatgpt']
+            logger.info(f"Round {round_num+1} hint: {next_hint}")
+            yield session.call("rie.dialogue.say", text=next_hint)
 
-            # Log YOLO detections
-            if yolo_objects:
-                logger.info(f"YOLO detected {len(yolo_objects)} objects:")
-                for obj in yolo_objects:
-                    logger.info(f"  {obj['name']} (confidence: {obj['confidence']:.2f})")
+            # Add to our collection of hints
+            all_hints.append(next_hint)
 
-            # Log ChatGPT Vision detections
-            if gpt_objects:
-                logger.info(f"ChatGPT Vision detected {len(gpt_objects)} objects:")
-                for obj in gpt_objects:
-                    desc = obj.get('description', 'No description')
-                    logger.info(f"  {obj['name']} (confidence: {obj['confidence']:.2f})")
-                    logger.info(f"    Description: {desc}")
+        return all_hints
 
-            # Save detection results to file for detailed analysis
-            save_detection_results(objects)
-
-            # Show comparison message if both methods were used
-            if yolo_objects and gpt_objects:
-                logger.info(f"Comparison: YOLO found {len(yolo_objects)} objects, ChatGPT found {len(gpt_objects)}")
-
-                # Find objects detected by both methods
-                yolo_names = set(obj['name'].lower() for obj in yolo_objects)
-                gpt_names = set(obj['name'].lower() for obj in gpt_objects)
-                common_names = yolo_names.intersection(gpt_names)
-
-                if common_names:
-                    logger.info(f"Both methods detected: {', '.join(common_names)}")
-
-                # Find unique detections
-                yolo_unique = yolo_names - gpt_names
-                gpt_unique = gpt_names - yolo_names
-
-                if yolo_unique:
-                    logger.info(f"Only YOLO detected: {', '.join(yolo_unique)}")
-
-                if gpt_unique:
-                    logger.info(f"Only ChatGPT detected: {', '.join(gpt_unique)}")
-        else:
-            logger.info("No objects detected in test image")
-
-        return True
-    else:
-        logger.warning("Failed to capture test image")
-        return False
+    except Exception as e:
+        logger.error(f"Error in demo_hints: {e}")
+        return []
 
 
 @inlineCallbacks
@@ -219,7 +201,7 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty
         "use_yolo": use_yolo
     }
 
-    # Perform the scan using the capture_and_analyze function
+    # Perform the scan using the capture_and_analyze function with extra parameters
     scan_results, all_objects = yield perform_scan(
         session,
         mode=scan_mode,
@@ -240,8 +222,6 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty
         yield session.call("rie.dialogue.say", text=result_text)
 
         # Select an object for the I Spy game based on difficulty
-        from assignment_3.api.api_handler import choose_object
-
         selected_object = choose_object(all_objects, difficulty)
 
         if selected_object:
@@ -249,9 +229,6 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty
                 f"Selected object for I Spy game: {selected_object['name']} ({selected_object.get('dutch_name', 'unknown')})")
             logger.info(f"Object features: {selected_object.get('features', {})}")
             logger.info(f"Object position: {selected_object.get('position_id', 'unknown')}")
-
-            # Start the I Spy game (this will be handled by another module)
-            yield session.call("rie.dialogue.say", text=f"Let's play I Spy! I'm thinking of something in this room.")
 
             # Store the selected object for the game logic
             game_object = {
@@ -263,7 +240,8 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty
                 "turn": selected_object.get('turn', 0),
                 "yaw": selected_object.get('yaw', 0),
                 "pitch": selected_object.get('pitch', 0),
-                "cumulative_rotation": selected_object.get('cumulative_rotation', 0)
+                "cumulative_rotation": selected_object.get('cumulative_rotation', 0),
+                "difficulty": difficulty  # Add difficulty to the game object
             }
 
             # Save the game object to a file for later use
@@ -273,6 +251,40 @@ def run_scan_test(session, scan_mode=MODE_STATIC, point_enabled=True, difficulty
                 logger.info("Saved game object to current_game_object.json")
             except Exception as e:
                 logger.error(f"Error saving game object: {e}")
+
+            # Demo the hint system by generating an initial hint and some additional hints
+            logger.info(f"Demonstrating I Spy hints for difficulty level {difficulty}...")
+
+            # Generate and demonstrate hints (initial + 2 additional hints)
+            all_hints = yield demo_hints(session, game_object, difficulty, num_rounds=2)
+
+            # Save the hints to the game object file for reference
+            game_object['hints'] = all_hints
+            try:
+                with open('current_game_object.json', 'w') as f:
+                    json.dump(game_object, f, indent=2)
+                logger.info(f"Updated game object with {len(all_hints)} hints")
+            except Exception as e:
+                logger.error(f"Error updating game object with hints: {e}")
+
+            # Add demonstration of pointing to the object if enabled
+            if point_enabled:
+                yield sleep(1.0)  # Pause before pointing
+                yield session.call("rie.dialogue.say", text=f"Let me show you what I was thinking of.")
+
+                # Calculate pointing angle based on stored position
+                yaw = game_object.get('yaw', 0)
+                cumulative_rotation = game_object.get('cumulative_rotation', 0)
+                pointing_angle = yaw
+
+                # If we're in 360 mode, adjust for the robot's rotation
+                if scan_mode == MODE_360:
+                    pointing_angle = pointing_angle + cumulative_rotation
+
+                # Point to the object
+                logger.info(f"Pointing to {game_object['name']} at angle {pointing_angle}")
+                yield point_to_object(session, selected_object)
+
         else:
             logger.warning("Failed to select an object for the I Spy game")
     else:
@@ -300,9 +312,6 @@ def main(session, details):
 
     # Wait for a moment to ensure everything is initialized
     yield sleep(2)
-
-    # Test a single image capture first, using the same detection settings
-    yield test_single_image(session, use_chatgpt=True)  # Always use ChatGPT for test
 
     # Run the full scan test with specified parameters
     scan_results = yield run_scan_test(
@@ -335,12 +344,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test scanner for robot vision")
     parser.add_argument('--no-point', action='store_true', default=False,
                         help='Disable pointing to detected objects')
-    parser.add_argument('--mode', choices=['static', '360'], default='360',
+    parser.add_argument('--mode', choices=['static', '360'], default='static',
                         help='Scan mode: static (head movement only) or 360 (full rotation)')
     parser.add_argument('--difficulty', type=int, choices=[1, 2, 3], default=1,
                         help='Difficulty level for the I Spy game (1=easy, 2=medium, 3=hard)')
     parser.add_argument('--use-yolo', action='store_true', default=False,
                         help='Enable YOLO object detection (disabled by default for I Spy game)')
+    parser.add_argument('--hints-only', action='store_true', default=False,
+                        help='Skip scanning and only demonstrate hints with the last saved object')
     args = parser.parse_args()
 
     # Configure WAMP component
@@ -358,5 +369,3 @@ if __name__ == "__main__":
 
     # Run the component
     run([wamp])
-
-

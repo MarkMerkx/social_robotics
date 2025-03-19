@@ -1,15 +1,21 @@
 {
-  "name": "computer monitor",
-  "dutch_name": "computer monitor",
+  "name": "monitor",
+  "dutch_name": "monitor",
   "features": {
-    "color": "unknown",
-    "size": "unknown",
-    "shape": "unknown"
+    "color": "black",
+    "size": "large",
+    "shape": "rectangular"
   },
   "position_id": "0_left",
   "orientation": "",
   "turn": 0,
   "yaw": 0,
   "pitch": 0,
-  "cumulative_rotation": 0
+  "cumulative_rotation": 0,
+  "difficulty": 1,
+  "hints": [
+    "The object I'm thinking of is black.",
+    "This object is big and has a long shape like a rectangle.",
+    "I spy with my little eye something that helps you see pictures and play games on a computer."
+  ]
 }

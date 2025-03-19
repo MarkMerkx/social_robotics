@@ -1,36 +1,6 @@
 {
-  "gpt_computer monitor_0": {
-    "name": "computer monitor",
-    "confidence": 0.9,
-    "source": "chatgpt",
-    "features": {
-      "color": "unknown",
-      "size": "unknown",
-      "shape": "unknown"
-    }
-  },
-  "gpt_laptop_1": {
-    "name": "laptop",
-    "confidence": 0.85,
-    "source": "chatgpt",
-    "features": {
-      "color": "unknown",
-      "size": "unknown",
-      "shape": "unknown"
-    }
-  },
-  "gpt_people_2": {
-    "name": "people",
-    "confidence": 0.8,
-    "source": "chatgpt",
-    "features": {
-      "color": "unknown",
-      "size": "unknown",
-      "shape": "unknown"
-    }
-  },
-  "gpt_table_3": {
-    "name": "table",
+  "gpt_monitor_0": {
+    "name": "monitor",
     "confidence": 0.95,
     "source": "chatgpt",
     "features": {
@@ -39,9 +9,9 @@
       "shape": "unknown"
     }
   },
-  "gpt_window_4": {
-    "name": "window",
-    "confidence": 0.7,
+  "gpt_desk_1": {
+    "name": "desk",
+    "confidence": 0.85,
     "source": "chatgpt",
     "features": {
       "color": "unknown",
@@ -49,9 +19,19 @@
       "shape": "unknown"
     }
   },
-  "gpt_office chairs_5": {
-    "name": "office chairs",
-    "confidence": 0.8,
+  "gpt_cable_2": {
+    "name": "cable",
+    "confidence": 0.75,
+    "source": "chatgpt",
+    "features": {
+      "color": "unknown",
+      "size": "unknown",
+      "shape": "unknown"
+    }
+  },
+  "gpt_floor_3": {
+    "name": "floor",
+    "confidence": 0.7,
     "source": "chatgpt",
     "features": {
       "color": "unknown",

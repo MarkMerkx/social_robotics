@@ -212,12 +212,13 @@ def scan_position_and_capture(session, yaw, pitch, capture_callback, **extra_con
     """
     try:
         # Determine head orientation based on yaw angle
-        if yaw < -0.2:
-            orientation = "left"
-        elif yaw > 0.2:
+        if yaw < -0.5:
             orientation = "right"
+        elif yaw > 0.5:
+            orientation = "left"
         else:
             orientation = "middle"
+        logger.debug(f"Current yaw: {yaw}, current position: {orientation} ")
 
         # Create position identifier (turn_orientation)
         turn = extra_context.get('turn', 0)
@@ -232,8 +233,7 @@ def scan_position_and_capture(session, yaw, pitch, capture_callback, **extra_con
             f"Moving to position yaw={yaw:.2f}, pitch={pitch:.2f}, orientation={orientation}, position={position_id}")
 
         # Move with generous timing - explicitly setting movement time
-        move_success = yield move_head_to_position(session, yaw, pitch, move_time=2000)
-
+        move_success = yield move_head_to_position(session, yaw, pitch, move_time=1500)
         if not move_success:
             logger.warning("Failed to move head to target position")
             return None
@@ -343,26 +343,35 @@ def perform_static_scan(session, capture_callback, process_callback=None, extra_
     Perform a static scan using only head movements.
 
     :param session: The WAMP session
-    :type session: Component
     :param capture_callback: Function to call to capture images
-    :type capture_callback: callable
     :param process_callback: Function to call to process results
-    :type process_callback: callable
     :param extra_context: Additional context to pass to capture_callback
-    :type extra_context: dict
-    :return: Dictionary of scan results and all detected objects
-    :rtype: tuple(dict, dict)
+    :return: (scan_results, all_objects)
     """
     logger.info("Starting static scan (head movement only)")
 
-    # Use default scan angles
+    # Use default angles: left, center, right
     yaw_angles = DEFAULT_HEAD_YAW_RANGE
     pitch_angles = DEFAULT_HEAD_PITCH_RANGE
 
-    # Initial scanning gesture to indicate start
-    yield perform_scanning_gesture(session)
+    # If no extra_context dict is given, create one
+    if extra_context is None:
+        extra_context = {}
 
-    # Perform the scan with extra_context
+    # Optional pause before we start
+    yield sleep(1.0)
+
+    # Move head to neutral (0, 0)
+    logger.info("Centering head before starting scan")
+    yield move_head_to_position(session, 0.0, 0.0, move_time=1500)
+    yield sleep(0.5)  # small delay for stability
+
+    # Mark which turn we are on (used in scans)
+    extra_context["turn"] = 0
+    extra_context["cumulative_rotation"] = 0
+
+    # Now do the actual scanning
+    logger.info("Executing static scan pattern with improved head movement")
     scan_results, all_objects = yield scan_area(
         session,
         yaw_angles,
@@ -372,8 +381,13 @@ def perform_static_scan(session, capture_callback, process_callback=None, extra_
         extra_context=extra_context
     )
 
+    # Return head to center again at the end
+    logger.info("Returning head to center position")
+    yield move_head_to_position(session, 0.0, 0.0, move_time=1800)
+
     logger.info(f"Static scan complete. Scanned {len(scan_results)} positions.")
     return scan_results, all_objects
+
 
 
 @inlineCallbacks
@@ -393,9 +407,6 @@ def perform_360_scan(session, capture_callback, process_callback=None, extra_con
     :rtype: tuple(dict, dict)
     """
     logger.info("Starting 360-degree scan")
-
-    # Initial gesture and setup
-    yield perform_scanning_gesture(session)
 
     turns = 3  # 120 degree turns for full coverage
     turn_angle = 120  # Degrees per turn
@@ -489,180 +500,219 @@ def perform_scan(session, mode=MODE_STATIC, capture_callback=None, process_callb
 
 
 @inlineCallbacks
-def point_to_object(session, angle, pitch=0.0):
+def point_to_object(session, obj_info, use_torso=True):
     """
-    Make the robot point toward a specific angle.
+    Point the robot at the given object's angle, possibly rotating the torso as well.
+    Also speak the object's name in English and Dutch.
 
-    :param session: The WAMP session
-    :type session: Component
-    :param angle: Angle to point to in degrees
-    :type angle: float
-    :param pitch: Pitch angle in degrees (default: 0.0)
-    :type pitch: float
-    :return: Success flag
-    :rtype: bool
+    :param session: WAMP session
+    :param obj_info: Dict with keys like "yaw", "pitch", "cumulative_rotation",
+                     "name", "dutch_name"
+    :param use_torso: Whether to rotate the torso for large angles
     """
     try:
-        logger.info(f"Pointing to angle={angle}°, pitch={pitch}°")
+        # 1) Read relevant fields from obj_info
+        angle_deg = obj_info.get('yaw', 0)
+        pitch_deg = obj_info.get('pitch', 0)
+        cumulative_rotation = obj_info.get('cumulative_rotation', 0)
+        english_name = obj_info.get('name', 'unknown')
+        dutch_name = obj_info.get('dutch_name', 'onbekend')
 
-        # Convert to radians
-        angle_rad = math.radians(angle)
-        pitch_rad = math.radians(pitch)
+        logger.info(f"Request to point to object: {english_name} / {dutch_name} at yaw={angle_deg}, pitch={pitch_deg}, cumulative={cumulative_rotation}")
 
-        # First move head to look at the target (with slower movement)
-        yield move_head_to_position(session, angle_rad, pitch_rad, move_time=2000)
+        # 2) Possibly add the cumulative rotation if the robot is in 360 mode
+        # If your code always sets 'cumulative_rotation'=0 for static mode, that’s fine
+        final_angle = angle_deg + cumulative_rotation
 
-        # Choose which arm to use based on angle
-        if angle >= 0:  # Use left arm for positive angles (left side)
-            gesture_name = 'point_left'
-        else:  # Use right arm for negative angles (right side)
-            gesture_name = 'point_right'
+        # Normalize final_angle into [-180, +180]
+        final_angle = ((final_angle + 180) % 360) - 180
 
-        # Check if we have a predefined pointing gesture
-        if gesture_name in GESTURES:
-            frames = GESTURES[gesture_name].get('keyframes', [])
+        logger.info(f"Computed final angle (after rotation) = {final_angle:.1f} degrees")
 
-            if frames:
-                # Update head yaw value in all frames to match our target angle
-                for frame in frames:
-                    if 'data' in frame and 'body.head.yaw' in frame['data']:
-                        frame['data']['body.head.yaw'] = angle_rad
+        # 3) Optionally speak the name in English and Dutch
+        # For example: "In English, it's called phone, and in Dutch, telefoon!"
+        # You can reorder or modify the text to your preference
+        speech_text = f"In English, it's called {english_name}, and in Dutch, we call it {dutch_name}!"
+        yield session.call("rie.dialogue.say", text=speech_text)
 
-                logger.info(f"Using {gesture_name} gesture from gestures.json")
-                yield perform_movement(session, frames, mode="linear", sync=True, force=True)
-                yield sleep(2.0)  # Hold the pointing position briefly
+        # 4) Possibly rotate torso if final_angle is large
+        #    We'll do a naive approach: if angle is outside ±45°, rotate torso by half the angle
+        torso_rotation = 0
+        if use_torso and abs(final_angle) > 45:
+            torso_rotation = final_angle * 0.5
+            # Clamp torso within [-50, 50] degrees, for example
+            torso_rotation = max(min(torso_rotation, 50), -50)
+            logger.info(f"Rotating torso by {torso_rotation:.1f} degrees first.")
+            yield _rotate_torso(session, torso_rotation)
+            # Subtract that from final_angle
+            final_angle -= torso_rotation
 
-                # Return to default position with appropriate timing
-                reset_frames = [
-                    {
-                        "time": 0,
-                        "data": {
-                            "body.head.yaw": angle_rad,
-                            "body.head.pitch": pitch_rad,
-                            "body.arms.left.upper.pitch": frames[-1]["data"].get("body.arms.left.upper.pitch", 0.0),
-                            "body.arms.left.lower.roll": frames[-1]["data"].get("body.arms.left.lower.roll", 0.0),
-                            "body.arms.right.upper.pitch": frames[-1]["data"].get("body.arms.right.upper.pitch", 0.0),
-                            "body.arms.right.lower.roll": frames[-1]["data"].get("body.arms.right.lower.roll", 0.0)
-                        }
-                    },
-                    {
-                        "time": 1800,  # Slower reset
-                        "data": {
-                            "body.head.yaw": 0.0,
-                            "body.head.pitch": 0.0,
-                            "body.arms.left.upper.pitch": 0.0,
-                            "body.arms.left.lower.roll": 0.0,
-                            "body.arms.right.upper.pitch": 0.0,
-                            "body.arms.right.lower.roll": 0.0
-                        }
-                    }
-                ]
-                yield perform_movement(session, reset_frames, mode="linear", sync=True, force=True)
-                return True
+        # 5) Now we only have 'final_angle' for the head
+        #    Also clamp pitch if needed, e.g. pitch in [-30..30] deg
+        head_pitch = max(min(pitch_deg, 30), -30)
 
-        # Fallback to creating a simple pointing gesture (with slower movement)
-        logger.info("Using fallback pointing gesture")
-        if angle >= 0:  # Left arm
-            arm_frames = [
-                {
-                    "time": 0,
-                    "data": {
-                        "body.arms.left.upper.pitch": 0.0,
-                        "body.arms.left.lower.roll": 0.0,
-                        "body.head.yaw": angle_rad,
-                        "body.head.pitch": pitch_rad
-                    }
-                },
-                {
-                    "time": 1800,  # Slower
-                    "data": {
-                        "body.arms.left.upper.pitch": -1.5,
-                        "body.arms.left.lower.roll": -0.7,
-                        "body.head.yaw": angle_rad,
-                        "body.head.pitch": pitch_rad
-                    }
-                },
-                {
-                    "time": 4000,  # Longer hold
-                    "data": {
-                        "body.arms.left.upper.pitch": -1.5,
-                        "body.arms.left.lower.roll": -0.7,
-                        "body.head.yaw": angle_rad,
-                        "body.head.pitch": pitch_rad
-                    }
-                },
-                {
-                    "time": 5800,  # Slower return
-                    "data": {
-                        "body.arms.left.upper.pitch": 0.0,
-                        "body.arms.left.lower.roll": 0.0,
-                        "body.head.yaw": 0.0,
-                        "body.head.pitch": 0.0
-                    }
-                }
-            ]
-        else:  # Right arm
-            arm_frames = [
-                {
-                    "time": 0,
-                    "data": {
-                        "body.arms.right.upper.pitch": 0.0,
-                        "body.arms.right.lower.roll": 0.0,
-                        "body.head.yaw": angle_rad,
-                        "body.head.pitch": pitch_rad
-                    }
-                },
-                {
-                    "time": 1800,  # Slower
-                    "data": {
-                        "body.arms.right.upper.pitch": -1.5,
-                        "body.arms.right.lower.roll": -0.7,
-                        "body.head.yaw": angle_rad,
-                        "body.head.pitch": pitch_rad
-                    }
-                },
-                {
-                    "time": 4000,  # Longer hold
-                    "data": {
-                        "body.arms.right.upper.pitch": -1.5,
-                        "body.arms.right.lower.roll": -0.7,
-                        "body.head.yaw": angle_rad,
-                        "body.head.pitch": pitch_rad
-                    }
-                },
-                {
-                    "time": 5800,  # Slower return
-                    "data": {
-                        "body.arms.right.upper.pitch": 0.0,
-                        "body.arms.right.lower.roll": 0.0,
-                        "body.head.yaw": 0.0,
-                        "body.head.pitch": 0.0
-                    }
-                }
-            ]
+        # 6) Convert these angles to radians
+        head_yaw_rads = math.radians(final_angle)
+        head_pitch_rads = math.radians(head_pitch)
 
-        yield perform_movement(session, arm_frames, mode="linear", sync=True, force=True)
+        # 7) Move the head
+        logger.info(f"Final head yaw={final_angle:.1f}°, pitch={head_pitch:.1f}°")
+        yield move_head_to_position(session, head_yaw_rads, head_pitch_rads, move_time=1500)
+
+        # 8) Execute the pointing gesture with the arms, as in your existing fallback code
+        #    We'll pick left or right based on sign of final_angle
+        #    ( >0 => left, <0 => right ), or you can keep the code from your snippet
+        if final_angle >= 0:
+            # left arm
+            logger.info("Doing fallback left-arm pointing gesture")
+            yield _fallback_left_point(session, head_yaw_rads, head_pitch_rads)
+        else:
+            # right arm
+            logger.info("Doing fallback right-arm pointing gesture")
+            yield _fallback_right_point(session, head_yaw_rads, head_pitch_rads)
+
         return True
 
     except Exception as e:
-        logger.error(f"Error pointing to object: {e}")
-        # Try to reset position
-        try:
-            reset_frames = [
-                {
-                    "time": 0,
-                    "data": {
-                        "body.head.yaw": 0.0,
-                        "body.head.pitch": 0.0,
-                        "body.arms.left.upper.pitch": 0.0,
-                        "body.arms.left.lower.roll": 0.0,
-                        "body.arms.right.upper.pitch": 0.0,
-                        "body.arms.right.lower.roll": 0.0
-                    }
-                }
-            ]
-            yield perform_movement(session, reset_frames, mode="linear", sync=True, force=True)
-        except Exception as e2:
-            logger.error(f"Error resetting position: {e2}")
-
+        logger.error(f"Error in point_to_object: {e}")
+        # Optionally reset position
+        yield _reset_arms_and_head(session)
         return False
+
+
+@inlineCallbacks
+def _rotate_torso(session, angle_deg):
+    """
+    Rotate the robot's torso by 'angle_deg' (approx) if feasible.
+    Adjust frames as needed for your hardware constraints.
+    """
+    # Convert to radians
+    angle_rads = math.radians(angle_deg)
+    # Torso rotation frames (0 -> angle -> 0 if you want to keep it short)
+    # Or maybe you want to keep the torso rotated. We'll assume we keep it rotated
+    frames = [
+        {
+            "time": 0,
+            "data": {
+                "body.torso.yaw": 0.0
+            }
+        },
+        {
+            "time": 1500,
+            "data": {
+                "body.torso.yaw": angle_rads
+            }
+        }
+    ]
+    yield perform_movement(session, frames, mode="linear", sync=True, force=True)
+    yield sleep(0.5)
+
+@inlineCallbacks
+def _fallback_left_point(session, yaw_rads, pitch_rads):
+    """
+    Fallback left-arm pointing, similar to your existing code, but extracted to a helper.
+    """
+    arm_frames = [
+        {
+            "time": 0,
+            "data": {
+                "body.arms.left.upper.pitch": 0.0,
+                "body.arms.left.lower.roll": 0.0,
+                "body.head.yaw": yaw_rads,
+                "body.head.pitch": pitch_rads
+            }
+        },
+        {
+            "time": 1800,
+            "data": {
+                "body.arms.left.upper.pitch": -1.5,
+                "body.arms.left.lower.roll": -0.7,
+                "body.head.yaw": yaw_rads,
+                "body.head.pitch": pitch_rads
+            }
+        },
+        {
+            "time": 4000,
+            "data": {
+                "body.arms.left.upper.pitch": -1.5,
+                "body.arms.left.lower.roll": -0.7,
+                "body.head.yaw": yaw_rads,
+                "body.head.pitch": pitch_rads
+            }
+        },
+        {
+            "time": 5800,
+            "data": {
+                "body.arms.left.upper.pitch": 0.0,
+                "body.arms.left.lower.roll": 0.0,
+                "body.head.yaw": 0.0,
+                "body.head.pitch": 0.0
+            }
+        }
+    ]
+    yield perform_movement(session, arm_frames, mode="linear", sync=True, force=True)
+
+@inlineCallbacks
+def _fallback_right_point(session, yaw_rads, pitch_rads):
+    """
+    Fallback right-arm pointing, similar to your existing code, but extracted to a helper.
+    """
+    arm_frames = [
+        {
+            "time": 0,
+            "data": {
+                "body.arms.right.upper.pitch": 0.0,
+                "body.arms.right.lower.roll": 0.0,
+                "body.head.yaw": yaw_rads,
+                "body.head.pitch": pitch_rads
+            }
+        },
+        {
+            "time": 1800,
+            "data": {
+                "body.arms.right.upper.pitch": -1.5,
+                "body.arms.right.lower.roll": -0.7,
+                "body.head.yaw": yaw_rads,
+                "body.head.pitch": pitch_rads
+            }
+        },
+        {
+            "time": 4000,
+            "data": {
+                "body.arms.right.upper.pitch": -1.5,
+                "body.arms.right.lower.roll": -0.7,
+                "body.head.yaw": yaw_rads,
+                "body.head.pitch": pitch_rads
+            }
+        },
+        {
+            "time": 5800,
+            "data": {
+                "body.arms.right.upper.pitch": 0.0,
+                "body.arms.right.lower.roll": 0.0,
+                "body.head.yaw": 0.0,
+                "body.head.pitch": 0.0
+            }
+        }
+    ]
+    yield perform_movement(session, arm_frames, mode="linear", sync=True, force=True)
+
+
+@inlineCallbacks
+def _reset_arms_and_head(session):
+    """Just resets arms and head to neutral if pointing fails."""
+    reset_frames = [
+        {
+            "time": 0,
+            "data": {
+                "body.head.yaw": 0.0,
+                "body.head.pitch": 0.0,
+                "body.arms.left.upper.pitch": 0.0,
+                "body.arms.left.lower.roll": 0.0,
+                "body.arms.right.upper.pitch": 0.0,
+                "body.arms.right.lower.roll": 0.0
+            }
+        }
+    ]
+    yield perform_movement(session, reset_frames, mode="linear", sync=True, force=True)
+

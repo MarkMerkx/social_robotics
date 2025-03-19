@@ -9,8 +9,8 @@ from autobahn.twisted.util import sleep
 from alpha_mini_rug import perform_movement
 
 # Import the new gesture generation and smoothing functions.
-from gesture_control.generate_frames import generate_beat_frames
-from gesture_control.smoothing import smooth_predefined_frames, smooth_keyframes
+from assignment_3.gesture_control.generate_frames import generate_beat_frames
+from assignment_3.gesture_control.smoothing import smooth_predefined_frames, smooth_keyframes
 
 logging.basicConfig(
     format='%(asctime)s GESTURE HANDLER %(levelname)-8s %(message)s',
@@ -44,12 +44,12 @@ def loop_gesture(session, dialogue_deferred, start_time, estimated_duration):
 
     while not dialogue_deferred.called:
         # 1) Generate on-the-fly
-        logger.debug("Generating beat gesture frames (2s).")
+        # logger.debug("Generating beat gesture frames (2s).")
         frames = generate_beat_frames(duration=1000, scale=0.5)
 
-        # 2) Smooth them
-        frames = smooth_keyframes(frames, steps=1)
-        logger.debug("Beat frames after smoothing: %s", frames)
+        # 2) Smooth them (disabled because of microstops)
+        # frames = smooth_keyframes(frames, steps=1)
+        # logger.debug("Beat frames after smoothing: %s", frames)
         elapsed = time.time() - start_time
         logger.debug(
             "Loop gesture iteration %d; elapsed time: %.2f (estimated: %.2f)",
@@ -121,9 +121,9 @@ def say_animated(session, text, gesture_name=None):
             pass
         else:
             # 2) Smooth them once (choose your function or steps).
-            logger.debug("Iconic frames before smoothing: %s", frames)
-            frames = smooth_predefined_frames(frames, steps=1)
-            logger.debug("Iconic frames after smoothing: %s", frames)
+            # logger.debug("Iconic frames before smoothing: %s", frames)
+            # frames = smooth_predefined_frames(frames, steps=1)
+            # logger.debug("Iconic frames after smoothing: %s", frames)
 
             # 3) Perform gesture once
             yield perform_single_gesture(session, frames)
