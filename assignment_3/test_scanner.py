@@ -344,7 +344,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test scanner for robot vision")
     parser.add_argument('--no-point', action='store_true', default=False,
                         help='Disable pointing to detected objects')
-    parser.add_argument('--mode', choices=['static', '360'], default='static',
+    parser.add_argument('--mode', choices=['static', '360'], default='360',
                         help='Scan mode: static (head movement only) or 360 (full rotation)')
     parser.add_argument('--difficulty', type=int, choices=[1, 2, 3], default=1,
                         help='Difficulty level for the I Spy game (1=easy, 2=medium, 3=hard)')
@@ -361,7 +361,7 @@ if __name__ == "__main__":
             "serializers": ["msgpack"],
             "max_retries": 0
         }],
-        realm="rie.67daa31e540602623a34bf03",
+        realm="rie.67e12f7d540602623a34dfbb",
     )
 
     # Register the main function

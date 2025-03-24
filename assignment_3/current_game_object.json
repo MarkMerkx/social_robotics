@@ -1,21 +1,16 @@
 {
-  "name": "monitor",
-  "dutch_name": "monitor",
+  "name": "desk",
+  "dutch_name": "bureau",
   "features": {
-    "color": "black",
-    "size": "large",
+    "color": "brown",
+    "size": "medium",
     "shape": "rectangular"
   },
-  "position_id": "0_left",
+  "position_id": "1_left",
   "orientation": "",
   "turn": 0,
   "yaw": 0,
   "pitch": 0,
   "cumulative_rotation": 0,
-  "difficulty": 1,
-  "hints": [
-    "The object I'm thinking of is black.",
-    "This object is big and has a long shape like a rectangle.",
-    "I spy with my little eye something that helps you see pictures and play games on a computer."
-  ]
+  "difficulty": 1
 }

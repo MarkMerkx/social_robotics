@@ -1,81 +1,71 @@
-# /game_control/robot_guesses.py
 import logging
-import re
-import string
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from api.api_handler import guess
-from game_control.game_utils import wait_for_response
-from gesture_control.say_animated import say_animated
+from assignment_3.gesture_control.scanning import run_scan, MODE_STATIC
+from assignment_3.api.api_handler import choose_object
+
 
 logger = logging.getLogger(__name__)
 
 
+def robot_guess(detected_objects, hints):
+    """
+    Generates a guess for the object based on detected objects and hints provided.
+    """
+    possible_objects = [obj for obj in detected_objects if all(hint in obj['features'] for hint in hints)]
+    if not possible_objects:
+        return "I can’t find any object that matches your hints."
+    import random
+    guess = random.choice(possible_objects)
+    return f"Is it a {guess['dutch_name']} or {guess['name']}?"
+
+
 @inlineCallbacks
-def play_game_robot_guesses(session, stt):
-    """
-    Game mode where the user thinks of a word and the robot tries to guess it by asking yes/no questions.
-    """
-    logger.debug("Starting play_game_robot_guesses()")
-    previous_guesses = []  # Each entry: {'guess': <question>, 'feedback': <user response>}
-
-    yield say_animated(session, "Great! Please think of a word and keep it in your mind.", gesture_name="beat_gesture")
-    logger.debug("User instructed to think of a word.")
+def play_game_robot_guesses(session, stt, dialogue_manager):
+    # Step 1: Object selection
+    yield dialogue_manager.say("Please look around the room and think of an object.", gesture="beat_gesture")
     yield sleep(5)
+    confirmation = yield dialogue_manager.ask_with_reprompt(
+        "Have you chosen an object?", gesture="beat_gesture", timeout=20
+    )
+    if not confirmation or "yes" not in confirmation.lower():
+        yield dialogue_manager.say("Okay, I’ll give you more time next round!", gesture="goodbye_wave")
+        return
 
-    # Wait for user readiness.
-    ready = None
-    while not ready or "yes" not in ready.lower():
-        ready = yield wait_for_response("Are you ready? Please say Yes when you are.", session, stt, timeout=20)
-        logger.debug("User readiness response: %s", ready)
-        if not ready or "yes" not in ready.lower():
-            yield session.call("rie.dialogue.say", text="Okay, waiting until you're ready...")
-            logger.debug("User not ready; waiting 3 seconds before trying again.")
-            yield sleep(3)
+    # Step 2: Initial hint
+    initial_hint_prompt = "<nl>Kun je me de kleur van je object vertellen?</nl> Can you tell me the color of your object?"
+    initial_hint = yield dialogue_manager.ask_with_reprompt(initial_hint_prompt, gesture="beat_gesture", timeout=20)
+    if not initial_hint:
+        yield dialogue_manager.say("I didn’t catch that. Let’s assume it’s red for now.", gesture="shake_no")
+        initial_hint = "red"
+    hints = [initial_hint]
 
-    yield session.call("rie.dialogue.say", text="Let's start!")
-    logger.debug("User confirmed readiness. Starting guessing rounds.")
-    last_feedback = ""
-    max_rounds = 7
-    round_counter = 0
+    # Step 3: Scan and guess loop
+    yield dialogue_manager.say("Now I’ll scan the room to find your object!", gesture="beat_gesture")
+    scan_results, detected_objects = yield run_scan(session, mode=MODE_STATIC)
 
-    while round_counter < max_rounds:
-        logger.debug("Round %d starting...", round_counter + 1)
-        # Generate the next question using ChatGPT.
-        guess_question = guess(last_feedback, previous_guesses)
-        # Remove all '<' and '>' characters from the prompts
-        clean_guess = re.sub(r'[<>]', '', guess_question).strip()
-        logger.debug("Generated guess question: %s", clean_guess)
+    max_guesses = 5
+    guess_count = 0
+    while guess_count < max_guesses:
+        guess = robot_guess(detected_objects, hints)
+        yield dialogue_manager.say(guess, gesture="beat_gesture")
+        feedback = yield dialogue_manager.listen(timeout=20)
 
-        # Robot speaks the question.
-        yield say_animated(session, clean_guess, gesture_name="beat_gesture")
-        yield sleep(5)
-
-        # Wait for the user's answer.
-        feedback = yield wait_for_response(None, session, stt, timeout=20)
-        if not feedback:
-            feedback = "No response"
-            logger.debug("No feedback received; defaulting to: %s", feedback)
-        else:
-            logger.debug("Feedback received: %s", feedback)
-
-        previous_guesses.append({'guess': clean_guess, 'feedback': feedback})
-        round_counter += 1
-
-        # Clean feedback (remove punctuation) for a robust match.
-        feedback_cleaned = feedback.lower().translate(str.maketrans("", "", string.punctuation))
-        win_keywords = ["that is correct", "yes thats it", "exactly", "yes you guessed it"]
-        if any(affirm in feedback_cleaned for affirm in win_keywords):
-            yield say_animated(session, "Yay! I guessed it!", gesture_name="celebration")
-            logger.debug("User confirmed correct guess. Ending game.")
+        if feedback and "yes" in feedback.lower():
+            yield dialogue_manager.say("Yay! I got it right!", gesture="celebration")
             break
         else:
-            last_feedback = feedback
-            logger.debug("Continuing game with last feedback: %s", last_feedback)
+            guess_count += 1
+            if guess_count < max_guesses:
+                additional_prompt = "<nl>Kun je me nog een hint geven?</nl> Can you give me another hint?"
+                yield dialogue_manager.say(additional_prompt, gesture="beat_gesture")
+                additional_hint = yield dialogue_manager.listen(timeout=20)
+                if additional_hint:
+                    hints.append(additional_hint)
+                else:
+                    yield dialogue_manager.say("No hint? I’ll try again anyway!", gesture="beat_gesture")
 
-    if round_counter >= max_rounds:
-        yield say_animated(session, "I give up! That was a challenging word.", gesture_name="defeat")
-        logger.debug("Reached maximum rounds; game over.")
-
-    yield say_animated(session, "Thanks for playing!", gesture_name="goodbye_wave")
-    logger.debug("Game ended. Thank you for playing!")
+    # Step 5: End game
+    if guess_count >= max_guesses:
+        yield dialogue_manager.say("I give up! Your object was too tricky for me.", gesture="defeat")
+    yield dialogue_manager.say("Thanks for playing with me!", gesture="goodbye_wave")

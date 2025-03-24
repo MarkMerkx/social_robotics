@@ -5,15 +5,17 @@ Provides functions to control the robot's head and body movements for scanning
 the environment, with both static field of view and 360-degree scanning modes.
 """
 
-import logging
 import json
-import os
+import logging
 import math
-import time
-from twisted.internet.defer import inlineCallbacks
-from autobahn.twisted.util import sleep
-from alpha_mini_rug import perform_movement
+import os
 
+from alpha_mini_rug import perform_movement
+from autobahn.twisted.util import sleep
+from twisted.internet.defer import inlineCallbacks
+from assignment_3.vision.image_capture import initialize_image_directory, capture_image
+from assignment_3.utils.helpers import process_detected_objects
+from assignment_3.vision.object_recognition import detect_objects
 logger = logging.getLogger(__name__)
 
 # Try to load gestures.json
@@ -46,6 +48,89 @@ STABILIZATION_DELAY = 1.0                            # Delay for camera stabiliz
 # Scan modes
 MODE_STATIC = "static"  # Static field of view (only head movement)
 MODE_360 = "360"        # 360-degree scan (robot turns in a circle)
+
+
+@inlineCallbacks
+def capture_and_detect(session, yaw, pitch, **extra_context):
+    """
+    Capture an image at the given position and detect objects.
+
+    :param session: The WAMP session object.
+    :param yaw: Yaw angle in radians.
+    :param pitch: Pitch angle in radians.
+    :param extra_context: Additional context (e.g., turn, orientation, position_id).
+    :return: Dictionary of detected objects.
+    """
+    try:
+        # Capture the image
+        result = yield capture_image(session, yaw, pitch)
+        if not result:
+            logger.warning("Failed to capture image")
+            return {}
+
+        image, _ = result
+
+        # Prepare position info for object detection
+        position_info = {
+            'yaw': yaw,
+            'pitch': pitch,
+            'yaw_deg': math.degrees(yaw),
+            'pitch_deg': math.degrees(pitch),
+            **extra_context  # Includes turn, orientation, position_id, etc.
+        }
+
+        # Detect objects (using ChatGPT Vision by default for I Spy game)
+        detected_objects, annotated_filename = detect_objects(
+            image,
+            position_info=position_info,
+            use_chatgpt=True,  # Optimized for feature detection in I Spy
+            use_yolo=False     # Disable YOLO unless specified otherwise
+        )
+
+        logger.info(f"Captured and annotated image: {annotated_filename}")
+        return detected_objects
+
+    except Exception as e:
+        logger.error(f"Error in capture_and_detect: {e}")
+        return {}
+
+@inlineCallbacks
+def run_scan(session, mode=MODE_STATIC, use_yolo=False):
+    """
+    Perform a scan and return detected objects.
+
+    :param session: The WAMP session object.
+    :param mode: Scan mode (MODE_STATIC or MODE_360).
+    :param use_yolo: Whether to use YOLO for object detection (default: False).
+    :return: Tuple of (scan_results, detected_objects).
+    """
+    mode_name = "360-degree" if mode == MODE_360 else "static"
+    logger.info(f"Starting {mode_name} environment scan")
+
+    # Announce the scan
+    yield session.call("rie.dialogue.say", text=f"Starting {mode_name} environment scan")
+
+    # Extra parameters for the capture callback
+    extra_params = {"use_yolo": use_yolo}
+
+    # Perform the scan
+    scan_results, detected_objects = yield perform_scan(
+        session,
+        mode=mode,
+        capture_callback=capture_and_detect,
+        process_callback=process_detected_objects,
+        extra_context=extra_params
+    )
+
+    # Log the results
+    object_count = len(detected_objects)
+    if object_count > 0:
+        logger.info(f"Scan complete. Detected {object_count} objects.")
+    else:
+        logger.info("Scan complete. No objects detected.")
+        yield session.call("rie.dialogue.say", text="I didn’t detect any objects.")
+
+    return scan_results, detected_objects
 
 
 @inlineCallbacks

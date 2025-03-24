@@ -85,23 +85,31 @@ def perform_single_gesture(session, frames):
     logger.debug("Single gesture completed.")
 
 
-
 @inlineCallbacks
-def say_animated(session, text, gesture_name=None):
+def say_animated(session, text, gesture_name=None, lang=None):
     """
     Animated speech:
-    - if gesture_name == "beat_gesture", generate frames, smooth them, then loop.
-    - if gesture_name is in GESTURE_LIBRARY, run it once, with smoothing if desired.
-    - else skip gestures.
+    - If gesture_name == "beat_gesture", generate frames, smooth them, then loop.
+    - If gesture_name is in GESTURE_LIBRARY, run it once, with smoothing if desired.
+    - Else skip gestures.
 
     We estimate TTS duration by 0.4s/word and stop the loop if that time is exceeded
-    or the TTS finishes earlier, whichever first.
+    or the TTS finishes earlier, whichever comes first.
+
+    Parameters:
+        session: WAMP session for TTS and gesture control.
+        text: The text to be spoken.
+        gesture_name: Optional name of the gesture to perform (default: None).
+        lang: Optional language code for TTS (e.g., "en" or "nl", default: None).
     """
-    logger.debug("say_animated called with text: '%s' and gesture: %s", text, gesture_name)
+    logger.debug("say_animated called with text: '%s', gesture: %s, lang: %s", text, gesture_name, lang)
 
     # Start TTS
     start_time = time.time()
-    dialogue_deferred = session.call("rie.dialogue.say", text=text)
+    if lang:
+        dialogue_deferred = session.call("rie.dialogue.say", text=text, lang=lang)
+    else:
+        dialogue_deferred = session.call("rie.dialogue.say", text=text)
 
     # Estimate TTS duration
     word_count = len(text.split())
@@ -110,7 +118,7 @@ def say_animated(session, text, gesture_name=None):
 
     # Decide gesture approach
     if gesture_name == "beat_gesture":
-        # Loop until TTS done or estimate exceeded
+        # Loop until TTS is done or estimate is exceeded
         yield loop_gesture(session, dialogue_deferred, start_time, estimated_duration)
 
     elif gesture_name in GESTURE_LIBRARY:
@@ -118,14 +126,8 @@ def say_animated(session, text, gesture_name=None):
         frames = GESTURE_LIBRARY[gesture_name].get("keyframes", [])
         if not frames:
             logger.warning("Gesture '%s' found in library but has no keyframes!", gesture_name)
-            pass
         else:
-            # 2) Smooth them once (choose your function or steps).
-            # logger.debug("Iconic frames before smoothing: %s", frames)
-            # frames = smooth_predefined_frames(frames, steps=1)
-            # logger.debug("Iconic frames after smoothing: %s", frames)
-
-            # 3) Perform gesture once
+            # 2) Perform gesture once (smoothing is optional and currently commented out)
             yield perform_single_gesture(session, frames)
     else:
         logger.debug("Gesture '%s' not found or None specified; skipping gesture.", gesture_name)

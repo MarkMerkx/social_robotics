@@ -9,27 +9,37 @@ logger = logging.getLogger(__name__)
 def give_hint(game_object, difficulty, round_num, previous_hints=None, is_initial_hint=False):
     """
     Generates a hint for the I Spy game based on the current game state.
+
+    Args:
+        game_object (dict): The object to hint about, with 'name', 'dutch_name', and 'features' (color, size, shape).
+        difficulty (int): Difficulty level (1=easy, 2=medium, 3=hard).
+        round_num (int): Current round number (0-based).
+        previous_hints (list): List of previous hints given (default None).
+        is_initial_hint (bool): Whether this is the initial hint (default False).
+
+    Returns:
+        str: A hint string tailored to the round and difficulty.
     """
     if previous_hints is None:
         previous_hints = []
 
-    # 1) Handle the 'initial hint' case quickly
+    # Handle the initial hint case
     if is_initial_hint:
         return _initial_hint(difficulty, game_object)
 
-    # 2) Try generating a new hint using ChatGPT
+    # Try generating a new hint using ChatGPT
     try:
         hint = _generate_gpt_hint(game_object, difficulty, round_num, previous_hints)
-        return hint.strip('"\'')  # Strip quotes if any
+        return hint.strip('"\'')  # Strip any stray quotes
 
     except Exception as e:
-        # 3) Fallback if there's an error
+        # Fallback if there's an error
         logger.error(f"Error generating hint: {e}")
         return _fallback_hint(difficulty, round_num, game_object)
 
 
 def _initial_hint(difficulty, game_object):
-    """Return an initial hint string immediately, depending on difficulty."""
+    """Generate an initial hint in English based on difficulty."""
     color = game_object.get('features', {}).get('color', 'unknown')
     size = game_object.get('features', {}).get('size', 'unknown')
 
@@ -42,8 +52,8 @@ def _initial_hint(difficulty, game_object):
 
 
 def _generate_gpt_hint(game_object, difficulty, round_num, previous_hints):
-    """Use the OpenAI API to generate a new hint."""
-    # 1) Prepare the relevant data
+    """Use the OpenAI API to generate a dynamic hint."""
+    # Extract object details
     object_name = game_object.get('name', '')
     dutch_name = game_object.get('dutch_name', '')
     features = game_object.get('features', {})
@@ -51,11 +61,11 @@ def _generate_gpt_hint(game_object, difficulty, round_num, previous_hints):
     size = features.get('size', 'unknown')
     shape = features.get('shape', 'unknown')
 
-    # 2) Build the user prompt
+    # Build the prompt for ChatGPT
     prompt = _build_chat_prompt(object_name, dutch_name, color, size, shape,
                                 difficulty, round_num, previous_hints)
 
-    # 3) Call the OpenAI API
+    # Call the OpenAI API
     api_key = chat_gtp_connection()
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
@@ -69,50 +79,62 @@ def _generate_gpt_hint(game_object, difficulty, round_num, previous_hints):
 
 def _build_chat_prompt(obj_name, dutch_name, color, size, shape, difficulty, round_num, prev_hints):
     """
-    Build a single user prompt for ChatGPT to produce one hint.
+    Construct a prompt for ChatGPT to generate a hint based on round and difficulty.
+
+    Returns:
+        str: A detailed prompt string for the OpenAI API.
     """
     prompt = (
-        f"I'm playing an 'I Spy' game where players need to guess this object: "
-        f"'{obj_name}' (Dutch: '{dutch_name}'). "
+        f"I'm playing an 'I Spy' game where players guess this object: '{obj_name}' (Dutch: '{dutch_name}'). "
         f"The object has these features: color: {color}, size: {size}, shape: {shape}.\n\n"
         f"This is round {round_num + 1} of the game, difficulty level {difficulty} (1=easy, 3=hard).\n\n"
         f"Previous hints given: {prev_hints}\n\n"
         "Please generate a single hint for this round that:"
     )
 
+    # Define language and content based on round number
+    if round_num == 0:  # Initial hint (handled separately, but included for completeness)
+        prompt += (
+            "\n- Is in English only"
+            "\n- Mentions the color of the object"
+            "\n- Is clear and straightforward for all players"
+        )
+    elif round_num == 1:  # Second hint
+        prompt += (
+            "\n- Is in Dutch only, enclosed in <nl>...</nl> tags"
+            "\n- Mentions the shape of the object"
+            "\n- Uses simple Dutch vocabulary"
+            "\n- Avoids contextual clues (e.g., usage or location)"
+        )
+    else:  # Subsequent hints (round 2+)
+        prompt += (
+            "\n- Is bilingual: first in Dutch (in <nl>...</nl> tags), then in English"
+            "\n- Mentions a feature like size or another attribute"
+            "\n- Avoids contextual clues in early rounds"
+            f"\n- Gets more specific as rounds progress (this is round {round_num + 1})"
+        )
+
+    # Adjust hint difficulty
     if difficulty == 1:
-        if round_num < 2:
-            prompt += (
-                "\n- Directly mentions ONE specific feature of the object"
-                "\n- Suitable for younger players"
-                "\n- Is clear and straightforward"
-            )
-        else:
-            prompt += (
-                "\n- Gives a more direct clue about the object's use or category"
-                "\n- Makes the object fairly easy to guess"
-                "\n- Is child-friendly and clear"
-            )
+        prompt += (
+            "\n- Is suitable for younger players"
+            "\n- Makes the object fairly easy to guess by round 3"
+        )
     elif difficulty == 2:
         prompt += (
             "\n- Is moderately challenging but fair"
-            "\n- Avoids directly stating the most obvious features"
-            "\n- Requires some thinking but isn't too cryptic"
-            f"\n- Gets more specific in later rounds (this is round {round_num + 1})"
+            "\n- Requires some thinking"
         )
     else:  # difficulty == 3
         prompt += (
-            "\n- Is quite challenging and requires creative thinking"
-            "\n- Uses indirect references, wordplay, or riddles"
-            "\n- Doesn't make the answer too obvious"
-            f"\n- Gets slightly more direct in later rounds (this is round {round_num + 1})"
+            "\n- Is challenging with indirect references"
+            "\n- Requires creative thinking"
         )
 
-    # Add final instructions for ChatGPT's format
     prompt += (
-        "\n\nYour response should be just the hint itself - no explanations, no additional text."
-        "\nThe hint should be ONE sentence only, written in simple language suitable for a robot to speak."
-        "\nDo not directly reveal what the object is."
+        "\n\nYour response should be just the hint itself - no explanations."
+        "\nThe hint should be ONE sentence, simple enough for a robot to speak."
+        "\nDo not reveal the object directly."
     )
 
     logger.debug("Built prompt for hint generation: %s", prompt)
@@ -120,7 +142,7 @@ def _build_chat_prompt(obj_name, dutch_name, color, size, shape, difficulty, rou
 
 
 def _fallback_hint(difficulty, round_num, game_object):
-    """Return a fallback hint if the API call fails."""
+    """Provide a fallback hint if the API call fails."""
     color = game_object.get('features', {}).get('color', 'unknown')
     size = game_object.get('features', {}).get('size', 'unknown')
     shape = game_object.get('features', {}).get('shape', 'unknown')
