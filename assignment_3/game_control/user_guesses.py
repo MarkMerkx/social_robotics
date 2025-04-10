@@ -1,22 +1,43 @@
 import logging
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from assignment_3.gesture_control.scanning import run_scan, MODE_STATIC
+from assignment_3.gesture_control.scanning import run_scan
 from assignment_3.api.api_handler import choose_object, start_i_spy_game, process_guess
 from assignment_3.gesture_control.point_to_object import point_to_object
 
 logger = logging.getLogger(__name__)
 
 @inlineCallbacks
-def play_game_user_guesses(session, stt, dialogue_manager):
-    """I Spy game where the user guesses the object the robot has chosen."""
+def play_game_user_guesses(session, stt, dialogue_manager, difficulty=1, scan_mode="static"):
+    """
+    I Spy game where the user guesses the object the robot has chosen.
+
+    :param session: WAMP session for controlling the robot
+    :type session: object
+    :param stt: SpeechToText instance for listening to user responses
+    :type stt: object
+    :param dialogue_manager: DialogueManager instance for speaking and listening
+    :type dialogue_manager: DialogueManager
+    :param difficulty: Difficulty level (1=easy, 2=medium, 3=hard), defaults to 1
+    :type difficulty: int, optional
+    :param scan_mode: Scan mode for the robot ("static" or "360"), defaults to "static"
+    :type scan_mode: str, optional
+
+    The game proceeds as follows:
+    1. The robot scans the room and chooses an object based on the difficulty.
+    2. The robot gives an initial hint.
+    3. The user guesses the object, with the robot providing feedback and additional hints.
+    4. If the user struggles (after 3 incorrect guesses), the difficulty is lowered (if above 1).
+    5. The game continues until the user guesses correctly or reaches the maximum number of rounds.
+
+    .. note:: The difficulty will not go below 1, even if dynamically adjusted.
+    """
     logger.debug("Starting I Spy user-guesses game...")
 
     yield session.call("rom.optional.behavior.play", name="BlocklyStand")
     yield dialogue_manager.say("Let me look around for something interesting...", gesture="beat_gesture")
-    scan_results, detected_objects = yield run_scan(session, mode=MODE_STATIC)
+    scan_results, detected_objects = yield run_scan(session, mode=scan_mode)
 
-    difficulty = 1
     chosen_object = choose_object(detected_objects, difficulty)
     if not chosen_object:
         yield dialogue_manager.say("I couldn't find anything interesting. Sorry!", gesture="shake_no")
@@ -51,6 +72,10 @@ def play_game_user_guesses(session, stt, dialogue_manager):
             yield sleep(3)
             break
         else:
+            # Lower difficulty after 3 incorrect guesses (round_num >= 2 since it starts at 0)
+            if round_num >= 2 and difficulty > 1:
+                difficulty -= 1
+                yield dialogue_manager.say("This seems tricky! I'll make the hints a bit easier.", gesture="beat_gesture")
             previous_hints.append(response_text)
             round_num += 1
 

@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 
@@ -34,11 +35,19 @@ stt.silence_time = 1.0
 stt.silence_threshold2 = 200
 stt.logging = False
 
+# Add command-line argument for scan mode
+parser = argparse.ArgumentParser(description="I Spy Game with Alpha Mini Robot")
+parser.add_argument(
+    "--scan-mode",
+    choices=["static", "360"],
+    default="static",
+    help="Set the robot's scan mode: 'static' or '360' (default: static)"
+)
+args = parser.parse_args()
 
 def process_audio():
     """Continuously process buffered audio data."""
     stt.loop()
-
 
 @inlineCallbacks
 def main(session, details):
@@ -62,12 +71,11 @@ def main(session, details):
     audio_loop = LoopingCall(process_audio)
     audio_loop.start(0.5)
 
-    # Start the game with the STT instance
-    yield play_game(session, stt)
+    # Start the game with the STT instance and scan mode
+    yield play_game(session, stt, scan_mode=args.scan_mode)
 
     while True:
         yield sleep(1)
-
 
 wamp = Component(
     transports=[{

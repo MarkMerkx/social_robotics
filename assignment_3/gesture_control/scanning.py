@@ -567,13 +567,6 @@ def perform_scan(session, mode=MODE_STATIC, capture_callback=None, process_callb
     :param session: The WAMP session
     :type session: Component
     :param mode: Scan mode ("static" or "360")
-    :type mode: str
-    :param capture_callback: Function to call to capture images
-    :type capture_callback: callable
-    :param process_callback: Function to call to process results
-    :type process_callback: callable
-    :param extra_context: Additional context to pass to capture_callback
-    :type extra_context: dict
     :return: Dictionary of scan results and all detected objects
     :rtype: tuple(dict, dict)
     """

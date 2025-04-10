@@ -1,12 +1,10 @@
 import logging
 from twisted.internet.defer import inlineCallbacks
 from autobahn.twisted.util import sleep
-from assignment_3.gesture_control.scanning import run_scan, MODE_STATIC
+from assignment_3.gesture_control.scanning import run_scan
 from assignment_3.api.api_handler import choose_object
 
-
 logger = logging.getLogger(__name__)
-
 
 def robot_guess(detected_objects, hints):
     """
@@ -19,9 +17,30 @@ def robot_guess(detected_objects, hints):
     guess = random.choice(possible_objects)
     return f"Is it a {guess['dutch_name']} or {guess['name']}?"
 
-
 @inlineCallbacks
-def play_game_robot_guesses(session, stt, dialogue_manager):
+def play_game_robot_guesses(session, stt, dialogue_manager, difficulty=1, scan_mode="static"):
+    """
+    I Spy game where the robot guesses the object the user has chosen.
+
+    :param session: WAMP session for controlling the robot
+    :type session: object
+    :param stt: SpeechToText instance for listening to user responses
+    :type stt: object
+    :param dialogue_manager: DialogueManager instance for speaking and listening
+    :type dialogue_manager: DialogueManager
+    :param difficulty: Difficulty level (1=easy, 2=medium, 3=hard), defaults to 1
+    :type difficulty: int, optional
+    :param scan_mode: Scan mode for the robot ("static" or "360"), defaults to "static"
+    :type scan_mode: str, optional
+
+    The game proceeds as follows:
+    1. The user thinks of an object, and the robot asks for an initial hint (color).
+    2. The robot scans the room and makes guesses based on the hints provided.
+    3. The user gives feedback ("yes" or "no"), and the robot asks for more hints if needed.
+    4. The game continues until the robot guesses correctly or reaches the maximum number of guesses.
+
+    .. note:: The difficulty parameter is currently not used in this game mode.
+    """
     # Step 1: Object selection
     yield dialogue_manager.say("Please look around the room and think of an object.", gesture="beat_gesture")
     yield sleep(5)
@@ -42,7 +61,7 @@ def play_game_robot_guesses(session, stt, dialogue_manager):
 
     # Step 3: Scan and guess loop
     yield dialogue_manager.say("Now I’ll scan the room to find your object!", gesture="beat_gesture")
-    scan_results, detected_objects = yield run_scan(session, mode=MODE_STATIC)
+    scan_results, detected_objects = yield run_scan(session, mode=scan_mode)
 
     max_guesses = 5
     guess_count = 0
